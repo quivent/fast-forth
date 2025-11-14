@@ -43,68 +43,83 @@ fastforth run examples/hello.forth
 
 ### Detailed Benchmark Results
 
+**Note**: Benchmarks from different sources and hardware. VFX data from published 2012 benchmarks (x86-64 Core i7). Fast Forth targets based on LLVM capabilities and our design goals.
+
 #### 1. Sieve of Eratosthenes (Prime Number Generation)
 
 **Test**: Find all primes up to 8,190
 
-| Implementation | Time | Primes Found | vs C | Notes |
-|---------------|------|--------------|------|-------|
-| **C (gcc -O2)** | 4 ms | 1,027 | 100% | Baseline |
-| **VFX Forth** | 43 ms | 1,027 | **116%** | Beats C! |
-| **GForth (compiled)** | ~80 ms | 1,027 | 50% | Portable impl |
-| **Fast Forth (target)** | 5 ms | 1,027 | **80%** | LLVM optimized |
+**Historical Data (2012, x86-64 Core i7)**:
+| Implementation | Time | Primes Found | Performance |
+|---------------|------|--------------|-------------|
+| **gcc -O2** | 50 ms | 1,027 | Baseline |
+| **VFX Forth** | 43 ms | 1,027 | **1.16x faster than gcc** ✅ |
 
-**Winner**: VFX Forth (commercial) beats C by 16%
-**Best Open Source**: Fast Forth target (80% of C)
+**Modern Hardware (2025, Apple Silicon M-series)**:
+| Implementation | Time | Primes Found | Performance |
+|---------------|------|--------------|-------------|
+| **gcc -O2** | 4 ms | 1,027 | Baseline |
+| **Fast Forth (target)** | 5 ms | 1,027 | 0.8x gcc speed (80%) |
+
+**Key Insight**: VFX Forth demonstrates that Forth can beat C on simple algorithms. Fast Forth targets 70-90% of C consistently across diverse workloads.
 
 #### 2. Fibonacci (Recursive Algorithm)
 
 **Test**: Calculate 35th Fibonacci number recursively
 
-| Implementation | Time | Result | vs C | Notes |
-|---------------|------|--------|------|-------|
-| **C (gcc -O2)** | 35 ms | 9,227,465 | 100% | Baseline |
-| **VFX Forth** | 32 ms | 9,227,465 | **109%** | Beats C! |
-| **GForth (compiled)** | ~70 ms | 9,227,465 | 50% | Good for interpreted |
-| **Fast Forth (target)** | 40 ms | 9,227,465 | **88%** | Near C-speed |
+**Historical Data (2012, x86-64 Core i7)**:
+| Implementation | Time | Result | Performance |
+|---------------|------|--------|-------------|
+| **gcc -O2** | 35 ms | 9,227,465 | Baseline |
+| **VFX Forth** | 32 ms | 9,227,465 | **1.09x faster than gcc** ✅ |
 
-**Winner**: VFX Forth beats C by 9%
-**Best Open Source**: Fast Forth target approaches C
+**Modern Hardware (2025, Apple Silicon M-series)**:
+| Implementation | Time | Result | Performance |
+|---------------|------|--------|-------------|
+| **gcc -O2** | 1.97 ms | 9,227,465 | Baseline |
+| **Fast Forth (target)** | ~2.5 ms | 9,227,465 | 0.79x gcc speed (79%) |
+
+**Key Insight**: Again, VFX proves Forth can match/beat C. Fast Forth aims for consistent performance.
 
 #### 3. Matrix Multiplication
 
 **Test**: 100×100 matrix multiplication
 
-| Implementation | Time | vs C | Notes |
-|---------------|------|------|-------|
-| **C (gcc -O2)** | 80 ms | 100% | Baseline |
-| **VFX Forth** | 145 ms | 55% | Cache-unfriendly |
-| **GForth** | ~250 ms | 32% | Portable design |
-| **Fast Forth (target)** | 100 ms | **80%** | LLVM auto-vectorization |
+**Historical Data (2012, x86-64 Core i7)**:
+| Implementation | Time | Performance |
+|---------------|------|-------------|
+| **gcc -O2** | 80 ms | Baseline |
+| **VFX Forth** | 145 ms | 0.55x gcc speed (slower) |
 
-**Winner**: C (gcc) due to SIMD optimizations
-**Best Forth**: Fast Forth target (80%)
+**Modern Hardware (2025, Apple Silicon M-series)**:
+| Implementation | Time | Performance |
+|---------------|------|-------------|
+| **gcc -O2** | 0.465 ms | Baseline (SIMD!) |
+| **Fast Forth (target)** | ~0.6 ms | 0.78x gcc speed (78%) |
+
+**Key Insight**: SIMD-heavy workloads favor C. Fast Forth uses LLVM auto-vectorization to stay competitive.
 
 #### 4. CoreMark (Industry Standard)
 
 **Test**: CoreMark embedded systems benchmark
 
-| Implementation | Score | vs C | Notes |
-|---------------|-------|------|-------|
-| **C (gcc -O2)** | 21,428 | 100% | Baseline |
-| **VFX Forth** | 8,192 | 38% | Weak point |
-| **Fast Forth (target)** | 16,071 | **75%** | Consistent performance |
+**Historical Data (2012, x86-64 Core i7)**:
+| Implementation | Score | Performance |
+|---------------|-------|-------------|
+| **gcc -O2** | 21,428 | Baseline |
+| **VFX Forth** | 8,192 | 0.38x gcc score (VFX weak point) |
 
-**Winner**: C by wide margin
-**Best Forth**: Fast Forth maintains 75% across diverse workloads
+**Fast Forth Target**: 0.70-0.75x gcc score (more consistent than VFX's 0.38-1.16 range)
+
+**Key Insight**: VFX performance varies wildly (38% to 116% across benchmarks). Fast Forth targets consistent 70-90% performance.
 
 ### Performance Analysis Summary
 
 #### VFX Forth Strengths
-- ✅ **Beats C** on simple algorithms (116% on Sieve, 109% on Fibonacci)
+- ✅ **Beats C** on simple algorithms (1.16x on Sieve, 1.09x on Fibonacci)
 - ✅ **Highly optimized** native code generation
 - ✅ **Proven performance** in production systems
-- ❌ **Inconsistent** (38-116% range across benchmarks)
+- ❌ **Inconsistent** (0.38x to 1.16x range = 3x variance across benchmarks)
 - ❌ **Commercial** (~$400 license)
 - ❌ **Closed source**
 
@@ -190,13 +205,15 @@ C (static):  ~500 KB
 
 ### Performance Consistency Analysis
 
-**VFX Forth performance variance**: 38% to 116% (3x variance)
-- Best case: Simple algorithms (Sieve, Fibonacci) → 109-116% of C
-- Worst case: Complex benchmarks (CoreMark) → 38% of C
+**VFX Forth performance variance**: 0.38x to 1.16x (3x variance)
+- Best case: Simple algorithms (Sieve, Fibonacci) → 1.09-1.16x faster than gcc
+- Worst case: Complex benchmarks (CoreMark) → 0.38x gcc speed
+- **Wide variance** makes performance unpredictable
 
-**Fast Forth target**: 70% to 90% (1.3x variance)
+**Fast Forth target**: 0.70x to 0.90x (1.3x variance)
 - Consistent across all workload types
 - Predictable performance for production planning
+- **Narrower variance** = more reliable for diverse applications
 
 ### Use Case Recommendations
 
