@@ -48,12 +48,19 @@ anyhow = "1.0"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+simd-json = "0.13"
+rkyv = { version = "0.7", features = ["validation"] }
 
 # Pattern system dependencies
 regex = "1.10"
 
 # Diagnostics and error handling
 lazy_static = "1.4"
+lru = "0.12"
+fxhash = "0.2"
+
+# Parallel processing
+rayon = "1.8"
 
 # Async runtime (optional, for server)
 tokio = { version = "1.35", features = ["full"], optional = true }
@@ -69,6 +76,10 @@ proptest.workspace = true
 
 [[bench]]
 name = "inference_bench"
+harness = false
+
+[[bench]]
+name = "phase2_optimization_bench"
 harness = false
 
 [dependencies.tracing-subscriber]

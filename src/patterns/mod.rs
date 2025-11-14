@@ -10,6 +10,7 @@
 pub mod registry;
 pub mod database;
 pub mod templates;
+pub mod template_jit;
 pub mod http;
 pub mod validation;
 pub mod cli;
@@ -18,6 +19,7 @@ pub mod integration;
 pub use registry::{PatternRegistry, Pattern, PatternCategory};
 pub use database::{PatternDatabase, PatternQuery};
 pub use templates::{PatternTemplate, TemplateVariable, instantiate_pattern};
+pub use template_jit::{instantiate_compiled, compile_and_cache};
 pub use http::{PatternServer, PatternApiConfig};
 pub use validation::{validate_pattern_metadata, PatternValidationError};
 pub use cli::{PatternCli, PatternCommand, execute_pattern_command};

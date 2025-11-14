@@ -39,16 +39,18 @@ impl SpecCodeGenerator {
         // Validate specification first
         spec.validate()?;
 
-        let mut output = String::new();
+        // Phase 1 optimization: Pre-allocate buffer with estimated capacity
+        // Typical generated code is 200-500 chars, so 512 is a good default
+        let mut output = String::with_capacity(512);
 
-        // Add header comment
-        output.push_str(&format!(
-            "\\ Generated from specification: {}\n",
-            spec.word
-        ));
+        // Add header comment using write! for more efficient string building
+        use std::fmt::Write;
+        write!(&mut output, "\\ Generated from specification: {}\n", spec.word)
+            .map_err(|_| SpecError::ValidationError("Failed to write header".to_string()))?;
 
         if let Some(desc) = &spec.description {
-            output.push_str(&format!("\\ {}\n", desc));
+            write!(&mut output, "\\ {}\n", desc)
+                .map_err(|_| SpecError::ValidationError("Failed to write description".to_string()))?;
         }
 
         output.push('\n');
@@ -85,34 +87,36 @@ impl SpecCodeGenerator {
 
     /// Generate provenance metadata
     fn generate_provenance(&self, spec: &Specification) -> String {
-        let mut output = String::new();
+        // Phase 1 optimization: Pre-allocate buffer for metadata (typically ~200 chars)
+        let mut output = String::with_capacity(256);
+        use std::fmt::Write;
 
         output.push_str("\\ GENERATED METADATA\n");
 
         if let Some(metadata) = &spec.metadata {
             if let Some(author) = &metadata.author {
-                output.push_str(&format!("\\   AUTHOR: {}\n", author));
+                let _ = write!(&mut output, "\\   AUTHOR: {}\n", author);
             }
             if let Some(version) = &metadata.version {
-                output.push_str(&format!("\\   VERSION: {}\n", version));
+                let _ = write!(&mut output, "\\   VERSION: {}\n", version);
             }
             if let Some(created) = &metadata.created {
-                output.push_str(&format!("\\   CREATED: {}\n", created));
+                let _ = write!(&mut output, "\\   CREATED: {}\n", created);
             }
         }
 
         if let Some(implementation) = &spec.implementation {
             if let Some(pattern) = &implementation.pattern {
-                output.push_str(&format!("\\   PATTERN: {}\n", pattern));
+                let _ = write!(&mut output, "\\   PATTERN: {}\n", pattern);
             }
         }
 
         if let Some(complexity) = &spec.complexity {
             if let Some(time) = &complexity.time {
-                output.push_str(&format!("\\   TIME_COMPLEXITY: {}\n", time));
+                let _ = write!(&mut output, "\\   TIME_COMPLEXITY: {}\n", time);
             }
             if let Some(space) = &complexity.space {
-                output.push_str(&format!("\\   SPACE_COMPLEXITY: {}\n", space));
+                let _ = write!(&mut output, "\\   SPACE_COMPLEXITY: {}\n", space);
             }
         }
 
@@ -122,15 +126,18 @@ impl SpecCodeGenerator {
 
     /// Generate word definition based on pattern or heuristics
     fn generate_word_definition(&self, spec: &Specification) -> SpecResult<String> {
-        let mut output = String::new();
+        // Phase 1 optimization: Pre-allocate buffer (typical word definition ~150 chars)
+        let mut output = String::with_capacity(200);
+        use std::fmt::Write;
 
-        // Stack effect comment
-        output.push_str(&format!(
+        // Stack effect comment - use write! for efficient formatting
+        write!(
+            &mut output,
             ": {} {}  \\ {}\n",
             spec.word,
             spec.stack_comment(),
             spec.description.as_deref().unwrap_or("")
-        ));
+        ).map_err(|_| SpecError::ValidationError("Failed to write word definition".to_string()))?;
 
         // Generate body based on pattern or heuristics
         let body = if let Some(implementation) = &spec.implementation {
@@ -143,8 +150,8 @@ impl SpecCodeGenerator {
             self.generate_heuristic(spec)?
         };
 
-        output.push_str(&format!("  {}\n", body));
-        output.push_str(";\n");
+        write!(&mut output, "  {}\n;\n", body)
+            .map_err(|_| SpecError::ValidationError("Failed to write body".to_string()))?;
 
         Ok(output)
     }

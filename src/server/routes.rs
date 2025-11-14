@@ -11,6 +11,23 @@ use crate::inference::InferenceAPI;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+#[cfg(feature = "server")]
+use lazy_static::lazy_static;
+#[cfg(feature = "server")]
+use fxhash::FxHashMap;
+
+// Phase 1 optimization: Pre-serialized common JSON responses
+#[cfg(feature = "server")]
+lazy_static! {
+    static ref COMMON_RESPONSES: FxHashMap<&'static str, String> = {
+        let mut m = FxHashMap::default();
+        m.insert("health_ok", r#"{"status":"healthy"}"#.to_string());
+        m.insert("verify_valid", r#"{"valid":true}"#.to_string());
+        m.insert("verify_invalid", r#"{"valid":false}"#.to_string());
+        m
+    };
+}
+
 /// Health check response
 #[derive(Serialize)]
 pub struct HealthResponse {
