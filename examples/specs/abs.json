@@ -1,0 +1,74 @@
+{
+  "word": "abs",
+  "description": "Calculates the absolute value of a number",
+  "stack_effect": {
+    "inputs": [
+      {
+        "name": "n",
+        "type": "int"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "|n|",
+        "type": "int",
+        "value": "|n|"
+      }
+    ]
+  },
+  "properties": [
+    "abs(n) = n if n >= 0",
+    "abs(n) = -n if n < 0",
+    "abs(0) = 0",
+    "abs(-n) = abs(n)"
+  ],
+  "test_cases": [
+    {
+      "description": "Zero",
+      "input": [0],
+      "output": [0],
+      "tags": ["base_case"]
+    },
+    {
+      "description": "Positive number",
+      "input": [42],
+      "output": [42],
+      "tags": ["property"]
+    },
+    {
+      "description": "Negative number",
+      "input": [-42],
+      "output": [42],
+      "tags": ["property"]
+    },
+    {
+      "description": "Negative one",
+      "input": [-1],
+      "output": [1],
+      "tags": ["edge_case"]
+    },
+    {
+      "description": "Large negative",
+      "input": [-1000],
+      "output": [1000],
+      "tags": ["edge_case"]
+    }
+  ],
+  "complexity": {
+    "time": "O(1)",
+    "space": "O(1)"
+  },
+  "implementation": {
+    "pattern": "CONDITIONAL_NEGATE_002",
+    "hints": [
+      "Use dup 0 < if negate then pattern",
+      "Consider sign bit manipulation for optimization"
+    ]
+  },
+  "metadata": {
+    "author": "FastForth Team",
+    "version": "1.0.0",
+    "created": "2025-01-14T00:00:00Z",
+    "tags": ["math", "conditional", "simple"]
+  }
+}

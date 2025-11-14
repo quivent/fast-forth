@@ -1,0 +1,189 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fastforth.dev/schemas/specification.json",
+  "title": "Fast Forth Word Specification",
+  "description": "Machine-readable specification for Fast Forth word definitions",
+  "type": "object",
+  "required": ["word", "stack_effect"],
+  "properties": {
+    "word": {
+      "type": "string",
+      "description": "Name of the Forth word being defined",
+      "pattern": "^[a-zA-Z0-9_\\-+*/<>=!?]+$",
+      "examples": ["factorial", "square", "abs", "gcd"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this word does",
+      "examples": ["Calculates factorial of n", "Computes the square of a number"]
+    },
+    "stack_effect": {
+      "type": "object",
+      "description": "Stack transformation performed by this word",
+      "required": ["inputs", "outputs"],
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "description": "Input parameters consumed from stack",
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Parameter name for documentation",
+                "examples": ["n", "a", "b", "x"]
+              },
+              "type": {
+                "type": "string",
+                "enum": ["int", "uint", "bool", "char", "addr", "any"],
+                "description": "Type of the parameter"
+              },
+              "constraint": {
+                "type": "string",
+                "description": "Constraint on the parameter value",
+                "examples": ["n >= 0", "n > 0", "0 <= x <= 100"]
+              }
+            }
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Output values produced on stack",
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Result name for documentation",
+                "examples": ["result", "n!", "sum"]
+              },
+              "type": {
+                "type": "string",
+                "enum": ["int", "uint", "bool", "char", "addr", "any"],
+                "description": "Type of the result"
+              },
+              "value": {
+                "type": "string",
+                "description": "Mathematical or logical expression for the result",
+                "examples": ["n!", "n²", "a+b", "|n|"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "properties": {
+      "type": "array",
+      "description": "Mathematical or logical properties that must hold",
+      "items": {
+        "type": "string",
+        "examples": [
+          "factorial(0) = 1",
+          "factorial(n) = n * factorial(n-1)",
+          "square(n) = n * n",
+          "abs(n) = n if n >= 0",
+          "abs(n) = -n if n < 0"
+        ]
+      }
+    },
+    "test_cases": {
+      "type": "array",
+      "description": "Concrete test cases for verification",
+      "items": {
+        "type": "object",
+        "required": ["input", "output"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Description of what this test case validates"
+          },
+          "input": {
+            "type": "array",
+            "description": "Input stack values (bottom to top)",
+            "items": {
+              "type": ["integer", "boolean", "string"]
+            }
+          },
+          "output": {
+            "type": "array",
+            "description": "Expected output stack values (bottom to top)",
+            "items": {
+              "type": ["integer", "boolean", "string"]
+            }
+          },
+          "tags": {
+            "type": "array",
+            "description": "Tags for test categorization",
+            "items": {
+              "type": "string",
+              "enum": ["base_case", "edge_case", "boundary", "error", "performance", "property"]
+            }
+          }
+        }
+      }
+    },
+    "complexity": {
+      "type": "object",
+      "description": "Computational complexity bounds",
+      "properties": {
+        "time": {
+          "type": "string",
+          "description": "Time complexity in Big-O notation",
+          "examples": ["O(1)", "O(n)", "O(n log n)", "O(n²)"]
+        },
+        "space": {
+          "type": "string",
+          "description": "Space complexity in Big-O notation",
+          "examples": ["O(1)", "O(n)", "O(log n)"]
+        }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "description": "Implementation hints and patterns",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Canonical pattern ID to use",
+          "examples": ["RECURSIVE_004", "ACCUMULATOR_LOOP_003", "CONDITIONAL_002"]
+        },
+        "hints": {
+          "type": "array",
+          "description": "Implementation hints for code generation",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "author": {
+          "type": "string",
+          "description": "Specification author"
+        },
+        "version": {
+          "type": "string",
+          "description": "Specification version",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags for categorization",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

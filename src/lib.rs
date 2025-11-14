@@ -20,9 +20,64 @@ pub mod error;
 pub mod compiler;
 pub mod pipeline;
 pub mod backend;
+pub mod patterns;
+
+// Machine-readable specifications
+pub mod spec;
+
+// Code generation from specifications
+pub mod codegen;
+
+// Auto-test generation
+pub mod testing;
+
+// Stream 5: Compositional Type Algebra and Semantic Diff
+pub mod type_algebra;
+pub mod symbolic;
+pub mod semantic_diff;
+
+// Performance modeling and benchmarks (Stream 6)
+pub mod performance;
+
+// Provenance metadata tracking (Stream 6)
+pub mod provenance;
+
+#[cfg(feature = "inference")]
+pub mod inference;
+
+#[cfg(feature = "server")]
+pub mod server;
 
 pub use error::{CompileError, Result};
 pub use pipeline::{CompilationPipeline, CompilationMode, CompilationResult};
+
+// Re-export pattern system
+pub use patterns::{
+    PatternDatabase, PatternRegistry, Pattern, PatternId, PatternQuery,
+    PatternTemplate, TemplateVariable, instantiate_pattern,
+    PatternServer, PatternApiConfig, PatternValidator,
+};
+
+// Re-export specification types
+pub use spec::{Specification, SpecValidator, SpecError, SpecResult};
+
+// Re-export code generation types
+pub use codegen::SpecCodeGenerator;
+
+// Re-export testing types
+pub use testing::TestGenerator;
+
+// Re-export performance types (Stream 6)
+pub use performance::{
+    PerformanceOptimizer, PerformanceModel, PerformancePrediction, PerformanceTarget,
+    PerformanceMetrics, ExecutionProfile, BenchmarkSuite, BenchmarkResult,
+};
+
+// Re-export provenance types (Stream 6)
+pub use provenance::{
+    ProvenanceMetadata, ProvenanceTracker, VerificationStatus, GenerationContext,
+    extract_provenance, embed_provenance,
+};
 
 // Re-export commonly used types from components
 pub use fastforth_frontend::{

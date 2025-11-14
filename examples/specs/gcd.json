@@ -1,0 +1,81 @@
+{
+  "word": "gcd",
+  "description": "Calculates the greatest common divisor using Euclid's algorithm",
+  "stack_effect": {
+    "inputs": [
+      {
+        "name": "a",
+        "type": "int",
+        "constraint": "a > 0"
+      },
+      {
+        "name": "b",
+        "type": "int",
+        "constraint": "b > 0"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "gcd(a,b)",
+        "type": "int",
+        "value": "gcd(a,b)"
+      }
+    ]
+  },
+  "properties": [
+    "gcd(a, 0) = a",
+    "gcd(a, b) = gcd(b, a mod b)",
+    "gcd(a, b) = gcd(b, a)",
+    "gcd(a, a) = a"
+  ],
+  "test_cases": [
+    {
+      "description": "Same numbers",
+      "input": [12, 12],
+      "output": [12],
+      "tags": ["base_case"]
+    },
+    {
+      "description": "Coprime numbers",
+      "input": [7, 13],
+      "output": [1],
+      "tags": ["property"]
+    },
+    {
+      "description": "Common factor",
+      "input": [48, 18],
+      "output": [6],
+      "tags": ["property"]
+    },
+    {
+      "description": "One divides other",
+      "input": [100, 10],
+      "output": [10],
+      "tags": ["edge_case"]
+    },
+    {
+      "description": "Large numbers",
+      "input": [1071, 462],
+      "output": [21],
+      "tags": ["property"]
+    }
+  ],
+  "complexity": {
+    "time": "O(log min(a,b))",
+    "space": "O(1)"
+  },
+  "implementation": {
+    "pattern": "TAIL_RECURSIVE_008",
+    "hints": [
+      "Use Euclidean algorithm",
+      "Implement with begin-while-repeat loop",
+      "Tail recursive implementation preferred"
+    ]
+  },
+  "metadata": {
+    "author": "FastForth Team",
+    "version": "1.0.0",
+    "created": "2025-01-14T00:00:00Z",
+    "tags": ["math", "algorithm", "recursive"]
+  }
+}

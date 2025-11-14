@@ -18,6 +18,11 @@ license.workspace = true
 name = "fastforth"
 path = "src/main.rs"
 
+[[bin]]
+name = "fastforth-server"
+path = "src/bin/fastforth-server.rs"
+required-features = ["server"]
+
 [lib]
 name = "fastforth"
 path = "src/lib.rs"
@@ -44,17 +49,38 @@ anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+# Pattern system dependencies
+regex = "1.10"
+
+# Diagnostics and error handling
+lazy_static = "1.4"
+
+# Async runtime (optional, for server)
+tokio = { version = "1.35", features = ["full"], optional = true }
+axum = { version = "0.7", optional = true }
+
+# System utilities
+num_cpus = "1.16"
+rustc-hash = "1.1"
+
 [dev-dependencies]
 criterion.workspace = true
 proptest.workspace = true
+
+[[bench]]
+name = "inference_bench"
+harness = false
 
 [dependencies.tracing-subscriber]
 workspace = true
 optional = true
 
 [features]
-default = []
+default = ["inference"]
 verbose = ["tracing-subscriber"]
+inference = []
+server = ["inference", "tokio", "axum"]
+http-server = ["tokio"]
 
 [workspace.package]
 version = "0.1.0"
