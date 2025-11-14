@@ -6,6 +6,7 @@
 pub mod stack_cache;
 pub mod primitives;
 pub mod control_flow;
+pub mod calling_convention;
 
 use crate::error::{BackendError, Result};
 use fastforth_frontend::ssa::{SSAFunction, SSAInstruction, Register, BlockId, BinaryOperator, UnaryOperator};
@@ -24,6 +25,10 @@ use std::path::Path;
 pub use stack_cache::StackCache;
 pub use primitives::PrimitiveCodegen;
 pub use control_flow::ControlFlowCodegen;
+pub use calling_convention::{
+    CallingConvention, CallingConventionType, ForthCallingConvention,
+    FFIBridge, ForthRegister, RegisterAllocator,
+};
 
 /// Compilation mode (AOT or JIT)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +63,12 @@ pub struct LLVMBackend<'ctx> {
     /// Control flow codegen
     pub control_flow: ControlFlowCodegen<'ctx>,
 
+    /// Calling convention
+    pub calling_convention: ForthCallingConvention,
+
+    /// FFI bridge for C interop
+    pub ffi_bridge: FFIBridge<'ctx>,
+
     /// Value mapping: SSA Register -> LLVM Value
     values: HashMap<Register, BasicValueEnum<'ctx>>,
 
@@ -85,6 +96,8 @@ impl<'ctx> LLVMBackend<'ctx> {
         let module = context.create_module(module_name);
         let builder = context.create_builder();
 
+        let ffi_bridge = FFIBridge::new(context, &module);
+
         Self {
             context,
             module,
@@ -92,6 +105,8 @@ impl<'ctx> LLVMBackend<'ctx> {
             stack_cache: StackCache::new(context, 3), // Keep top 3 stack items in registers
             primitives: PrimitiveCodegen::new(context),
             control_flow: ControlFlowCodegen::new(context),
+            calling_convention: ForthCallingConvention::internal(),
+            ffi_bridge,
             values: HashMap::new(),
             blocks: HashMap::new(),
             current_function: None,
@@ -313,19 +328,62 @@ impl<'ctx> LLVMBackend<'ctx> {
             .collect();
         let arg_values = arg_values?;
 
-        // Build call
-        let call = self.builder
-            .build_call(callee, &arg_values, "call")
-            .map_err(|e| BackendError::CodeGenError(e.to_string()))?;
+        // Use custom calling convention for the call
+        let result = self.calling_convention.generate_call(
+            &self.builder,
+            callee,
+            &arg_values,
+        )?;
 
         // Store result if present
         if let Some(&dest_reg) = dest.first() {
-            if let Some(ret_val) = call.try_as_basic_value().left() {
-                self.values.insert(dest_reg, ret_val);
-            }
+            self.values.insert(dest_reg, result);
         }
 
         Ok(())
+    }
+
+    /// Create FFI bridge for calling C function from Forth
+    pub fn create_c_ffi_bridge(
+        &mut self,
+        c_function_name: &str,
+        arg_count: usize,
+    ) -> Result<FunctionValue<'ctx>> {
+        // Get the C function
+        let c_function = self.module
+            .get_function(c_function_name)
+            .ok_or_else(|| BackendError::InvalidIR(format!("C function not found: {}", c_function_name)))?;
+
+        // Create the bridge
+        self.ffi_bridge.create_forth_to_c_bridge(
+            c_function_name,
+            c_function,
+            arg_count,
+        )
+    }
+
+    /// Create FFI bridge for calling Forth function from C
+    pub fn create_forth_ffi_bridge(
+        &mut self,
+        forth_function_name: &str,
+        arg_count: usize,
+    ) -> Result<FunctionValue<'ctx>> {
+        // Get the Forth function
+        let forth_function = self.module
+            .get_function(forth_function_name)
+            .ok_or_else(|| BackendError::InvalidIR(format!("Forth function not found: {}", forth_function_name)))?;
+
+        // Create the bridge
+        self.ffi_bridge.create_c_to_forth_bridge(
+            forth_function_name,
+            forth_function,
+            arg_count,
+        )
+    }
+
+    /// Set calling convention (for external calls)
+    pub fn set_calling_convention(&mut self, convention: ForthCallingConvention) {
+        self.calling_convention = convention;
     }
 
     /// Generate PHI node

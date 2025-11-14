@@ -3,6 +3,7 @@ members = [
     "backend",
     "frontend",
     "optimizer",
+    "benchmarks/performance_validation",
 ]
 resolver = "2"
 
