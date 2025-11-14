@@ -117,7 +117,7 @@ fastforth run examples/hello.forth
 | **gcc -O2** | 0.465 ms | Baseline (SIMD!) |
 | **Fast Forth (target)** | ~0.6 ms | 0.78x gcc speed (78%) |
 
-**Key Insight**: SIMD-heavy workloads favor C. Fast Forth uses LLVM auto-vectorization to stay competitive.
+**Key Insight**: LLVM provides identical auto-vectorization for C (clang), Rust, and Fast Forth. Manual SIMD intrinsics can provide additional speedup in any language.
 
 #### 4. CoreMark (Industry Standard)
 
@@ -194,7 +194,7 @@ Fast Forth fills a unique niche:
 | Stack optimization | ⚠️ Manual | ⚠️ LLVM | ⚠️ Escape analysis | ✅ **Stack caching (70-90% reduction)** |
 | Superinstructions | ❌ | ❌ | ❌ | ✅ **50+ patterns** |
 | Type checking | ⚠️ Weak | ✅ Borrow checker | ✅ Strong | ✅ **Hindley-Milner inference** |
-| SIMD/vectorization | ✅ Manual + auto | ✅ LLVM | ⚠️ Limited | ✅ LLVM auto-vectorization |
+| SIMD/vectorization | ✅ Manual + LLVM auto | ✅ LLVM auto (same as C) | ⚠️ Limited | ✅ LLVM auto (same as C/Rust) |
 | Compile time | 100-500ms | 1-2s (small) / 5-30min (large) | 500ms-2s | **50-100ms / 1-5s** |
 
 ### Real-World Performance Characteristics
