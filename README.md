@@ -426,7 +426,16 @@ void blink(void) {
 
 ## Agent Code Generation Instructions
 
-**For AI Agents**: Copy this section into your system prompt to optimize Fast Forth code generation.
+**For AI Agents**: Load [AGENT_CONTEXT.md](AGENT_CONTEXT.md) into your context for optimal Fast Forth code generation.
+
+**Quick Start**:
+```bash
+# Add to Claude Code
+cp AGENT_CONTEXT.md ~/.claude/docs/FAST_FORTH_CONTEXT.md
+
+# Or reference directly in prompts
+curl https://raw.githubusercontent.com/quivent/fast-forth/main/AGENT_CONTEXT.md
+```
 
 ---
 
