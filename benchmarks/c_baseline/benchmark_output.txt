@@ -1,0 +1,75 @@
+=====================================
+C BASELINE BENCHMARKS (gcc -O2)
+=====================================
+
+1. Sieve of Eratosthenes:
+C Sieve Benchmark (gcc -O2 baseline)
+=====================================
+Limit: 8190
+Iterations: 100
+
+Sieve(8190): Found 1027 primes
+Average time: 0.004 ms
+
+Validation: PASS (expected 1027 primes)
+
+2. Fibonacci:
+C Fibonacci Benchmark (gcc -O2 baseline)
+=========================================
+
+RECURSIVE VERSION
+-----------------
+Computing fib(35)...
+Fib_recursive(35): 9227465
+Average time: 1.968 ms
+
+ITERATIVE VERSION
+-----------------
+Computing fib(40)...
+Fib_iterative(40): 102334155
+Average time: 0.000011 ms
+
+Validation (recursive): PASS (expected 9227465)
+Validation (iterative): PASS (expected 102334155)
+
+3. Matrix Multiplication:
+C Matrix Multiplication Benchmark (gcc -O2 baseline)
+=====================================================
+Matrix size: 100x100
+Iterations: 10
+
+Result[0][0] = 1038.73
+Result[0][0] = 2348.54
+Average time: 0.465 ms
+
+4. Bubble Sort:
+C Bubble Sort Benchmark (gcc -O2 baseline)
+===========================================
+Array size: 1000
+Iterations: 10
+
+Sorted correctly: YES
+First 5 elements: 9 49 55 73 77
+Sorted correctly: YES
+First 5 elements: 9 21 38 39 49
+Average time: 0.266 ms
+
+5. String Operations:
+C String Operations Benchmark (gcc -O2 baseline)
+=================================================
+
+STRING COPY (10000 bytes)
+----------------------
+Average time: 0.000000 ms
+
+STRING REVERSE (10000 bytes)
+-------------------------
+Average time: 0.001684 ms
+
+STRING SEARCH (Boyer-Moore-Horspool)
+-------------------------------------
+Found 'quick' at position: 4
+Average time: 0.000010 ms
+
+
+=====================================

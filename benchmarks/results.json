@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-11-14 02:40:48",
+  "platform": {
+    "os": "Darwin",
+    "machine": "arm64",
+    "gcc_version": "Apple clang version 16.0.0 (clang-1600.0.26.6)",
+    "gforth_version": "gforth 0.7.3"
+  },
+  "benchmarks": {
+    "c": {
+      "sieve": {
+        "status": "success",
+        "avg_time_ms": 0.004,
+        "output": "C Sieve Benchmark (gcc -O2 baseline)\n=====================================\nLimit: 8190\nIterations: 100\n\nSieve(8190): Found 1027 primes\nAverage time: 0.004 ms\n\nValidation: FAIL (expected 1028 primes)\n",
+        "validation": "FAIL"
+      },
+      "fibonacci_rec": {
+        "status": "error",
+        "error": "[Errno 2] No such file or directory: './fibonacci'"
+      },
+      "matrix": {
+        "status": "error",
+        "error": "[Errno 2] No such file or directory: './matrix'"
+      },
+      "bubble_sort": {
+        "status": "error",
+        "error": "[Errno 2] No such file or directory: './bubble_sort'"
+      },
+      "string_ops": {
+        "status": "error",
+        "error": "[Errno 2] No such file or directory: './string_ops'"
+      }
+    }
+  }
+}

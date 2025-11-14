@@ -1,0 +1,87 @@
+[workspace]
+members = [
+    "backend",
+    "frontend",
+    "optimizer",
+]
+resolver = "2"
+
+[package]
+name = "fastforth"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "fastforth"
+path = "src/main.rs"
+
+[lib]
+name = "fastforth"
+path = "src/lib.rs"
+
+[dependencies]
+# Workspace crates
+fastforth-frontend = { path = "frontend" }
+fastforth-optimizer = { path = "optimizer" }
+
+# Core dependencies
+thiserror.workspace = true
+tracing.workspace = true
+smallvec.workspace = true
+
+# Command line interface
+clap = { version = "4.4", features = ["derive", "color", "suggestions"] }
+rustyline = "13.0"
+colored = "2.1"
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+
+[dependencies.tracing-subscriber]
+workspace = true
+optional = true
+
+[features]
+default = []
+verbose = ["tracing-subscriber"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["FastForth Optimizer Team"]
+license = "MIT"
+
+[workspace.dependencies]
+# Core dependencies
+petgraph = "0.6"
+smallvec = "1.11"
+hashbrown = "0.14"
+rustc-hash = "1.1"
+
+# Analysis and optimization
+cranelift-codegen = "0.102"
+inkwell = { version = "0.4", features = ["llvm16-0"] }
+
+# Utilities
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# Testing
+proptest = "1.4"
+
+# Frontend dependencies
+nom = "7.1"

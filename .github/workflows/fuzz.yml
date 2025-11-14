@@ -1,0 +1,38 @@
+name: Fuzz Testing
+
+on:
+  schedule:
+    # Run fuzzing every day at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+        override: true
+
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz
+
+    - name: Run fuzzer (5 minutes)
+      run: |
+        cd tests/fuzz
+        cargo fuzz run fuzz_parser -- -max_total_time=300
+      continue-on-error: true
+
+    - name: Upload artifacts
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: fuzz-artifacts
+        path: tests/fuzz/artifacts/

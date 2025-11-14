@@ -1,0 +1,3 @@
+# Force this package to be independent of the workspace during build
+[build]
+target-dir = "target"
