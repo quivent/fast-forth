@@ -150,16 +150,14 @@ impl Backend {
     }
 
     /// Compile an SSA function to native code
+    /// DEPRECATED: Use backend::cranelift::jit_execute() or CraneliftBackend two-pass API instead
     pub fn compile_function(&mut self, ssa_func: &SSAFunction, name: &str) -> Result<*const u8> {
         match self.backend_type {
             #[cfg(feature = "cranelift")]
             BackendType::Cranelift => {
-                if let Some(ref mut compiler) = self.cranelift {
-                    compiler.compile(ssa_func, name)
-                        .map_err(|e| CompileError::BackendError(format!("Cranelift compilation failed: {}", e)))
-                } else {
-                    Err(CompileError::BackendError("Cranelift not initialized".to_string()))
-                }
+                Err(CompileError::BackendError(
+                    "Single-pass compile_function API deprecated. Use backend::cranelift::jit_execute() or CraneliftBackend two-pass API (declare_all_functions, compile_function for each, then finalize_all) for recursion support.".to_string()
+                ))
             }
 
             #[cfg(not(feature = "cranelift"))]

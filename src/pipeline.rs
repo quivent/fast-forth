@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_simple_compilation() {
-        let pipeline = CompilationPipeline::new(OptimizationLevel::Basic);
+        let mut pipeline = CompilationPipeline::new(OptimizationLevel::Basic);
         let source = ": double 2 * ;";
 
         // This will fail until backend is implemented, but tests the pipeline structure

@@ -34,24 +34,32 @@ impl SemanticAnalyzer {
         for word in &[
             // Arithmetic
             "+", "-", "*", "/", "mod", "/mod", "negate", "abs", "min", "max",
+            "1+", "1-", "2+", "2-", "2*", "2/", "*/", "*/mod",
             // Stack manipulation
             "dup", "drop", "swap", "over", "rot", "2dup", "2drop", "2swap", "2over",
-            "pick", "roll", "depth",
+            "pick", "roll", "depth", "?dup",
             // Comparison
-            "<", ">", "=", "<=", ">=", "<>", "0<", "0>", "0=",
+            "<", ">", "=", "<=", ">=", "<>", "0<", "0>", "0=", "0<>",
+            "u<", "u>", "u<=", "u>=",
+            "d=", "d<", "d0=", "d0<",
             // Logical
-            "and", "or", "xor", "not", "invert",
+            "and", "or", "xor", "not", "invert", "true", "false",
             // Memory
             "@", "!", "c@", "c!", "+!", "?",
+            "cell", "cells", "cell+", "char+", "chars", "align", "aligned",
+            "move", "fill", "erase", "compare", "search", "count",
             // I/O
             ".", "emit", "cr", "space", "spaces", "type",
+            ".\"", ".(", ".r", ".s",
             // Control (these are special but should be recognized)
             "if", "then", "else", "begin", "until", "while", "repeat",
             "do", "loop", "+loop", "leave", "exit",
             // Return stack
             ">r", "r>", "r@",
             // Other
-            "here", "allot", "cells", "cell+", "i", "j", "execute", "char",
+            "here", "allot", "execute", "char",
+            "within", "sm/rem", "fm/mod",
+            "d+", "d-", "dnegate", "dabs", "d2*", "d2/",
         ] {
             defined_words.insert(word.to_string());
         }

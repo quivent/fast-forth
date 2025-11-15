@@ -97,9 +97,32 @@ impl ForthCompiler {
         let total_start = Instant::now();
         let mut metrics = CompilationMetrics::default();
 
-        // Read source
-        let source = std::fs::read_to_string(input_path)
+        // Read prelude (ANS Forth core library)
+        let prelude_path = Path::new("runtime/ans_core.forth");
+        let prelude = if prelude_path.exists() {
+            std::fs::read_to_string(prelude_path)
+                .context("Failed to read prelude")?
+        } else {
+            // Fallback: look in repository root or installation directory
+            let fallback_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("runtime/ans_core.forth");
+            if fallback_path.exists() {
+                std::fs::read_to_string(&fallback_path)
+                    .context("Failed to read prelude from fallback location")?
+            } else {
+                String::new() // No prelude available
+            }
+        };
+
+        // Read user source
+        let user_source = std::fs::read_to_string(input_path)
             .context("Failed to read input file")?;
+
+        // Combine prelude + user source
+        let source = if !prelude.is_empty() {
+            format!("{}\n\\ === User Code ===\n{}", prelude, user_source)
+        } else {
+            user_source
+        };
 
         metrics.source_bytes = source.len();
         metrics.source_lines = source.lines().count();

@@ -6,7 +6,7 @@ use crate::error::{BackendError, Result};
 use crate::cranelift::{CraneliftSettings, SSATranslator};
 use fastforth_frontend::ssa::SSAFunction;
 
-use cranelift_codegen::ir::{AbiParam, Function, Signature};
+use cranelift_codegen::ir::{AbiParam, Function, FuncRef, Signature};
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings::{self, Configurable, Flags};
 use cranelift_codegen::Context;
@@ -24,6 +24,8 @@ pub struct CraneliftBackend {
     builder_ctx: FunctionBuilderContext,
     settings: CraneliftSettings,
     functions: HashMap<String, FuncId>,
+    /// Cached function references for calls (populated during compilation)
+    func_refs: HashMap<String, FuncRef>,
 }
 
 impl CraneliftBackend {
@@ -80,42 +82,69 @@ impl CraneliftBackend {
             builder_ctx: FunctionBuilderContext::new(),
             settings,
             functions: HashMap::new(),
+            func_refs: HashMap::new(),
         })
     }
 
-    /// Compile an SSA function to native code
-    pub fn compile_function(&mut self, ssa_func: &SSAFunction, name: &str) -> Result<*const u8> {
+    /// Declare all functions upfront (for recursion/inter-function calls)
+    pub fn declare_all_functions(&mut self, functions: &[(String, &SSAFunction)]) -> Result<()> {
+        for (name, _) in functions {
+            let sig = self.create_signature();
+            let func_id = self.module
+                .declare_function(name, Linkage::Export, &sig)
+                .map_err(|e| BackendError::CodeGeneration(format!("Failed to declare function '{}': {}", name, e)))?;
+            self.functions.insert(name.clone(), func_id);
+        }
+        Ok(())
+    }
+
+    /// Compile an SSA function to native code (function must already be declared)
+    /// Note: Call finalize_all() after compiling all functions
+    pub fn compile_function(&mut self, ssa_func: &SSAFunction, name: &str) -> Result<()> {
+        // Get the function ID (must have been declared first)
+        let func_id = self.functions.get(name)
+            .copied()
+            .ok_or_else(|| BackendError::CodeGeneration(format!("Function '{}' not declared", name)))?;
+
         // Create function signature
         let sig = self.create_signature();
+        self.ctx.func.signature = sig;
 
-        // Declare function in module
-        let func_id = self.module
-            .declare_function(name, Linkage::Export, &sig)
-            .map_err(|e| BackendError::CodeGeneration(format!("Failed to declare function: {}", e)))?;
+        // Import all declared functions into this function's context (for calls)
+        // This must be done BEFORE translation begins
+        self.func_refs.clear();
+        for (func_name, &fid) in &self.functions {
+            let func_ref = self.module.declare_func_in_func(fid, &mut self.ctx.func);
+            self.func_refs.insert(func_name.clone(), func_ref);
+        }
+
+        // Clone func_refs to avoid borrow checker issues
+        let func_refs_copy = self.func_refs.clone();
 
         // Translate SSA to Cranelift IR
-        self.ctx.func.signature = sig;
-        let translator = SSATranslator::new(&mut self.ctx.func, &mut self.builder_ctx);
+        let translator = SSATranslator::new(
+            &mut self.ctx.func,
+            &mut self.builder_ctx,
+            &func_refs_copy,
+        );
         translator.translate(ssa_func)?;
 
-        // Compile function
+        // Define function (but don't finalize yet - allows recursion)
         self.module
             .define_function(func_id, &mut self.ctx)
-            .map_err(|e| BackendError::CodeGeneration(format!("Failed to define function: {}", e)))?;
+            .map_err(|e| BackendError::CodeGeneration(format!("Failed to define function '{}': {}", name, e)))?;
 
         // Clear context for next function
         self.module.clear_context(&mut self.ctx);
 
-        // Finalize and get function pointer
+        Ok(())
+    }
+
+    /// Finalize all compiled functions (call after compiling all functions)
+    pub fn finalize_all(&mut self) -> Result<()> {
         self.module.finalize_definitions()
             .map_err(|e| BackendError::CodeGeneration(format!("Failed to finalize: {}", e)))?;
-
-        let code_ptr = self.module.get_finalized_function(func_id);
-
-        // Store function ID
-        self.functions.insert(name.to_string(), func_id);
-
-        Ok(code_ptr)
+        Ok(())
     }
 
     /// Create standard Forth function signature (stack-based)
@@ -158,9 +187,10 @@ impl CraneliftCompiler {
         })
     }
 
-    /// Compile SSA function to native code
-    pub fn compile(&mut self, ssa_func: &SSAFunction, name: &str) -> Result<*const u8> {
-        self.backend.compile_function(ssa_func, name)
+    /// Get mutable reference to backend for two-pass compilation
+    /// (declare_all_functions, compile_function for each, then finalize_all)
+    pub fn backend_mut(&mut self) -> &mut CraneliftBackend {
+        &mut self.backend
     }
 
     /// Get compiled function by name

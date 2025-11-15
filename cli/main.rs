@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod error_messages;
+mod execute;
 mod profiler;
 mod repl;
 mod compiler;
@@ -400,8 +401,19 @@ fn run_execute(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             let mut profiler = Profiler::new();
             profiler.start();
 
-            // Execute (placeholder)
-            println!("{}", source);
+            // Execute with JIT
+            match execute::execute_program(&source, cli.verbose) {
+                Ok(result) => {
+                    if !cli.quiet {
+                        println!();
+                        println!("Result: {}", result);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    return Err(e.into());
+                }
+            }
 
             profiler.stop();
             let report = profiler.generate_report();
@@ -409,7 +421,18 @@ fn run_execute(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
             report.display();
         } else {
             // Execute normally
-            println!("{}", source);
+            match execute::execute_program(&source, cli.verbose) {
+                Ok(result) => {
+                    if !cli.quiet {
+                        println!();
+                        println!("Result: {}", result);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    return Err(e.into());
+                }
+            }
         }
 
         if !cli.quiet {

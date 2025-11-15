@@ -212,6 +212,8 @@ pub struct SSAConverter {
     next_block: usize,
     current_block: BlockId,
     blocks: Vec<BasicBlock>,
+    /// Map from function name to parameter count
+    function_params: std::collections::HashMap<String, usize>,
 }
 
 impl SSAConverter {
@@ -221,6 +223,7 @@ impl SSAConverter {
             next_block: 0,
             current_block: BlockId(0),
             blocks: Vec::new(),
+            function_params: std::collections::HashMap::new(),
         }
     }
 
@@ -555,9 +558,29 @@ impl SSAConverter {
 
             // Generic word call
             _ => {
-                // For now, treat as opaque call
+                // Look up the function to determine how many parameters it takes
+                let param_count = self.function_params.get(name).copied().unwrap_or(0);
+
+                // Pop arguments from stack
+                if stack.len() < param_count {
+                    return Err(ForthError::StackUnderflow {
+                        word: name.to_string(),
+                        expected: param_count,
+                        found: stack.len(),
+                    });
+                }
+
+                let mut args = SmallVec::new();
+                for _ in 0..param_count {
+                    // Pop from end and reverse to maintain order
+                    if let Some(arg) = stack.pop() {
+                        args.push(arg);
+                    }
+                }
+                // Reverse to get correct argument order
+                args.reverse();
+
                 let dest = self.fresh_register();
-                let args = SmallVec::new();
                 self.emit(SSAInstruction::Call {
                     dest: smallvec::smallvec![dest],
                     name: name.to_string(),
@@ -770,19 +793,25 @@ impl SSAConverter {
 
     /// Convert a definition to SSA function
     pub fn convert_definition(&mut self, def: &Definition) -> Result<SSAFunction> {
-        // Determine number of parameters from stack effect
-        let param_count = def
-            .stack_effect
-            .as_ref()
-            .map(|e| e.inputs.len())
-            .unwrap_or(0);
+        // Reset converter state for new function
+        self.next_block = 0;
+        self.blocks.clear();
+        self.current_block = BlockId(0);
+
+        // Determine number of parameters from stack effect, or infer from body
+        let param_count = if let Some(ref effect) = def.stack_effect {
+            effect.inputs.len()
+        } else {
+            // Infer parameter count by simulating the stack
+            self.infer_parameter_count(&def.body)?
+        };
 
         let mut function = SSAFunction::new(def.name.clone(), param_count);
 
         // Initialize register counter with parameters
         self.next_register = param_count;
 
-        // Create entry block
+        // Create entry block (will now be BlockId(0))
         let entry = self.create_block();
         self.set_current_block(entry);
 
@@ -803,6 +832,83 @@ impl SSAConverter {
 
         Ok(function)
     }
+
+    /// Infer the number of parameters needed by simulating stack depth
+    fn infer_parameter_count(&self, body: &[Word]) -> Result<usize> {
+        let mut min_depth: i32 = 0;
+        let mut current_depth: i32 = 0;
+
+        for word in body {
+            match word {
+                Word::IntLiteral(_) | Word::FloatLiteral(_) | Word::StringLiteral(_) => {
+                    current_depth += 1;
+                }
+                Word::WordRef { name, .. } => {
+                    // Get stack effect for this word
+                    let (consumes, produces) = self.get_word_stack_effect(name);
+                    current_depth -= consumes;
+                    if current_depth < min_depth {
+                        min_depth = current_depth;
+                    }
+                    current_depth += produces;
+                }
+                Word::If { .. } | Word::DoLoop { .. } | Word::BeginUntil { .. } | Word::BeginWhileRepeat { .. } => {
+                    // Control flow consumes condition from stack
+                    // DoLoop consumes limit and index (2 items), others consume 1 (condition)
+                    let consumed = match word {
+                        Word::DoLoop { .. } => 2, // limit index
+                        _ => 1, // condition for IF, UNTIL, WHILE
+                    };
+                    current_depth -= consumed;
+                    if current_depth < min_depth {
+                        min_depth = current_depth;
+                    }
+                }
+                Word::Variable { .. } => {
+                    // Variable pushes its address
+                    current_depth += 1;
+                }
+                Word::Constant { .. } => {
+                    // Constant pushes its value
+                    current_depth += 1;
+                }
+                Word::Comment(_) => {
+                    // Comments don't affect stack
+                }
+            }
+        }
+
+        // The minimum depth below 0 tells us how many parameters we need
+        Ok((-min_depth).max(0) as usize)
+    }
+
+    /// Get stack effect for a word (consumes, produces)
+    fn get_word_stack_effect(&self, name: &str) -> (i32, i32) {
+        match name {
+            // Arithmetic (2 in, 1 out)
+            "+" | "-" | "*" | "/" | "mod" => (2, 1),
+            "<" | ">" | "<=" | ">=" | "=" | "<>" => (2, 1),
+            "and" | "or" => (2, 1),
+
+            // Unary (1 in, 1 out)
+            "negate" | "abs" | "not" => (1, 1),
+            "1+" | "1-" | "2*" | "2/" => (1, 1),
+
+            // Stack manipulation
+            "dup" => (1, 2),
+            "drop" => (1, 0),
+            "swap" => (2, 2),
+            "over" => (2, 3),
+            "rot" => (3, 3),
+
+            // Memory
+            "@" => (1, 1),
+            "!" => (2, 0),
+
+            // Default: assume no stack effect for unknown words
+            _ => (0, 0),
+        }
+    }
 }
 
 impl Default for SSAConverter {
@@ -816,9 +922,36 @@ pub fn convert_to_ssa(program: &Program) -> Result<Vec<SSAFunction>> {
     let mut converter = SSAConverter::new();
     let mut functions = Vec::new();
 
+    // First pass: Build map of function names to parameter counts
+    for def in &program.definitions {
+        let param_count = if let Some(ref effect) = def.stack_effect {
+            effect.inputs.len()
+        } else {
+            // Infer parameter count
+            converter.infer_parameter_count(&def.body)?
+        };
+        converter.function_params.insert(def.name.clone(), param_count);
+    }
+
+    // Second pass: Convert all word definitions
     for def in &program.definitions {
         let function = converter.convert_definition(def)?;
         functions.push(function);
+    }
+
+    // If there's top-level code, wrap it in an implicit :main function
+    if !program.top_level_code.is_empty() {
+        // Create a synthetic Definition for top-level code
+        let main_def = Definition {
+            name: "main".to_string(),
+            body: program.top_level_code.clone(),
+            immediate: false,
+            stack_effect: None,  // Will be inferred
+            location: SourceLocation::default(),
+        };
+
+        let main_function = converter.convert_definition(&main_def)?;
+        functions.push(main_function);
     }
 
     Ok(functions)

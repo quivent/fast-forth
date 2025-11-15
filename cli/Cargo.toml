@@ -14,6 +14,10 @@ name = "fastforth"
 path = "main.rs"
 
 [dependencies]
+# Local crates
+fastforth-frontend = { path = "../frontend" }
+backend = { path = "../backend", features = ["cranelift"] }
+
 # CLI argument parsing
 clap = { version = "4.4", features = ["derive", "color", "suggestions"] }
 
