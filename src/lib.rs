@@ -109,7 +109,7 @@ impl Compiler {
 
     /// Compile Forth source code from a string
     pub fn compile_string(&self, source: &str, mode: CompilationMode) -> Result<CompilationResult> {
-        let pipeline = CompilationPipeline::new(self.optimization_level);
+        let mut pipeline = CompilationPipeline::new(self.optimization_level);
         pipeline.compile(source, mode)
     }
 

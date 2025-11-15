@@ -877,6 +877,11 @@ mod tests {
             specializations_created: 5,
             call_sites_rewritten: 15,
             estimated_speedup_percent: 0.0,
+            dispatch_eliminations: 12,
+            avg_specialized_size: 8.5,
+            code_size_increase_percent: 15.0,
+            int_specializations: 3,
+            float_specializations: 2,
         };
 
         stats.calculate_speedup();

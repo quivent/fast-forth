@@ -47,6 +47,7 @@ pub mod type_specialization;
 pub mod memory_opt;
 pub mod whole_program;
 pub mod zero_cost;
+pub mod cranelift_peephole;
 
 pub use ir::{ForthIR, Instruction, StackEffect, WordDef};
 pub use stack_cache::StackCacheOptimizer;
@@ -60,6 +61,7 @@ pub use type_specialization::{TypeSpecializer, TypeInferenceResults, ConcreteTyp
 pub use memory_opt::{MemoryOptimizer, OptimizationStats as MemoryOptimizationStats};
 pub use whole_program::{WholeProgramOptimizer, WPOStats};
 pub use zero_cost::{ZeroCostOptimizer, ZeroCostConfig, ZeroCostStats};
+pub use cranelift_peephole::{CraneliftPeephole, PeepholeStats};
 
 use thiserror::Error;
 
@@ -107,6 +109,7 @@ pub struct Optimizer {
     inline: InlineOptimizer,
     type_specializer: TypeSpecializer,
     memory_opt: MemoryOptimizer,
+    cranelift_peephole: CraneliftPeephole,
     // whole_program: WholeProgramOptimizer, // Temporarily disabled
     pgo_enabled: bool,
 }
@@ -124,6 +127,7 @@ impl Optimizer {
             inline: InlineOptimizer::new(level),
             type_specializer: TypeSpecializer::new(),
             memory_opt: MemoryOptimizer::new(),
+            cranelift_peephole: CraneliftPeephole::new(),
             // whole_program: WholeProgramOptimizer::new(level), // Temporarily disabled
             pgo_enabled: false,
         }
@@ -170,7 +174,7 @@ impl Optimizer {
     }
 
     /// Run all optimization passes in the optimal order
-    pub fn optimize(&self, mut ir: ForthIR) -> Result<ForthIR> {
+    pub fn optimize(&mut self, mut ir: ForthIR) -> Result<ForthIR> {
         if self.level == OptimizationLevel::None {
             return Ok(ir);
         }
@@ -183,6 +187,12 @@ impl Optimizer {
 
         // Pass 1: Constant folding (enables other optimizations)
         ir = self.constant_fold.fold(&ir)?;
+
+        // Pass 1.5: Cranelift-specific peephole optimizations (strength reduction, etc.)
+        // Run after constant folding for maximum effectiveness
+        if self.level >= OptimizationLevel::Basic {
+            ir = self.cranelift_peephole.optimize(&ir)?;
+        }
 
         // Pass 2: Inlining (expands small definitions)
         if self.level >= OptimizationLevel::Standard {
@@ -232,6 +242,11 @@ impl Optimizer {
         // Pass 2: Constant folding (enables other optimizations)
         ir = self.constant_fold.fold(&ir)?;
 
+        // Pass 2.5: Cranelift-specific peephole optimizations
+        if self.level >= OptimizationLevel::Basic {
+            ir = self.cranelift_peephole.optimize(&ir)?;
+        }
+
         // Pass 3: Inlining (expands small definitions)
         if self.level >= OptimizationLevel::Standard {
             ir = self.inline.inline(&ir)?;
@@ -271,13 +286,18 @@ impl Optimizer {
         &self.memory_opt
     }
 
+    /// Get peephole optimization statistics
+    pub fn peephole_stats(&self) -> &PeepholeStats {
+        self.cranelift_peephole.stats()
+    }
+
     // /// Get whole-program optimization reference
     // pub fn whole_program_optimizer(&self) -> &WholeProgramOptimizer {
     //     &self.whole_program
     // }
 
     /// Run optimization passes in a loop until fixpoint
-    pub fn optimize_until_fixpoint(&self, ir: ForthIR) -> Result<ForthIR> {
+    pub fn optimize_until_fixpoint(&mut self, ir: ForthIR) -> Result<ForthIR> {
         let mut current = ir;
         let mut iterations = 0;
         const MAX_ITERATIONS: usize = 10;

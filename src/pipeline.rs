@@ -82,7 +82,7 @@ impl CompilationPipeline {
     }
 
     /// Compile Forth source code
-    pub fn compile(&self, source: &str, mode: CompilationMode) -> Result<CompilationResult> {
+    pub fn compile(&mut self, source: &str, mode: CompilationMode) -> Result<CompilationResult> {
         let start_time = Instant::now();
         let mut stats = CompilationStats::default();
 
@@ -264,7 +264,7 @@ impl CompilationPipeline {
     }
 
     /// Run the optimizer
-    fn run_optimizer(&self, ir: ForthIR) -> Result<ForthIR> {
+    fn run_optimizer(&mut self, ir: ForthIR) -> Result<ForthIR> {
         debug!("Running optimizer with level {:?}...", self.optimization_level);
 
         let optimized = self.optimizer.optimize(ir)
