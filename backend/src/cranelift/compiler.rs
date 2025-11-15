@@ -51,9 +51,13 @@ impl CraneliftBackend {
                 flag_builder.set("opt_level", "speed")
                     .map_err(|e| BackendError::Initialization(format!("Failed to set opt_level: {}", e)))?;
             }
+            2 => {
+                flag_builder.set("opt_level", "speed_and_size")
+                    .map_err(|e| BackendError::Initialization(format!("Failed to set opt_level: {}", e)))?;
+            }
             _ => {
                 return Err(BackendError::Initialization(
-                    "Cranelift only supports opt_level 0 or 1. Use LLVM for -O2/-O3.".to_string()
+                    "Cranelift supports opt_level 0-2. Use LLVM for -O3.".to_string()
                 ));
             }
         }

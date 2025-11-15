@@ -27,20 +27,20 @@ pub struct BackendSelector;
 impl BackendSelector {
     /// Select backend based on optimization level
     ///
-    /// - O0, O1: Cranelift (fast compilation for development)
-    /// - O2, O3: LLVM (maximum optimization for production)
+    /// - O0, O1, O2: Cranelift (fast compilation, good performance)
+    /// - O3: LLVM (slow compilation, maximum performance)
     pub fn select_backend(opt_level: OptimizationLevel) -> BackendType {
         match opt_level {
-            OptimizationLevel::None | OptimizationLevel::Basic => {
-                // For development builds, prioritize fast compilation
+            OptimizationLevel::None | OptimizationLevel::Basic | OptimizationLevel::Standard => {
+                // For development and standard builds, prioritize fast compilation
                 #[cfg(feature = "cranelift")]
                 return BackendType::Cranelift;
 
                 #[cfg(not(feature = "cranelift"))]
                 BackendType::LLVM
             }
-            OptimizationLevel::Standard | OptimizationLevel::Aggressive => {
-                // For production builds, prioritize runtime performance
+            OptimizationLevel::Aggressive => {
+                // For maximum optimization, use LLVM
                 BackendType::LLVM
             }
         }
@@ -109,9 +109,10 @@ impl Backend {
                 let settings = match opt_level {
                     OptimizationLevel::None => CraneliftSettings::development(),
                     OptimizationLevel::Basic => CraneliftSettings::optimized_dev(),
-                    _ => {
+                    OptimizationLevel::Standard => CraneliftSettings::maximum(),
+                    OptimizationLevel::Aggressive => {
                         return Err(CompileError::BackendError(
-                            "Cranelift only supports O0/O1. Use LLVM for O2/O3.".to_string()
+                            "Cranelift maximum is -O2 (speed_and_size). Use LLVM for -O3.".to_string()
                         ))
                     }
                 };
@@ -256,14 +257,20 @@ mod tests {
 
     #[test]
     fn test_backend_selection() {
-        // O0/O1 should select Cranelift (if available)
+        // O0/O1/O2 should select Cranelift (if available)
         let backend = BackendSelector::select_backend(OptimizationLevel::None);
         #[cfg(feature = "cranelift")]
         assert_eq!(backend, BackendType::Cranelift);
         #[cfg(not(feature = "cranelift"))]
         assert_eq!(backend, BackendType::LLVM);
 
-        // O2/O3 should always select LLVM
+        let backend = BackendSelector::select_backend(OptimizationLevel::Standard);
+        #[cfg(feature = "cranelift")]
+        assert_eq!(backend, BackendType::Cranelift);
+        #[cfg(not(feature = "cranelift"))]
+        assert_eq!(backend, BackendType::LLVM);
+
+        // O3 should always select LLVM
         let backend = BackendSelector::select_backend(OptimizationLevel::Aggressive);
         assert_eq!(backend, BackendType::LLVM);
     }

@@ -2,10 +2,10 @@
 //!
 //! This module provides fast compilation through Cranelift code generator.
 //! Trade-off: 100x faster compilation (50ms vs 2-5min) with slightly lower
-//! runtime performance (70-85% of C vs LLVM's 85-110% of C).
+//! runtime performance (70-90% of C vs LLVM's 85-110% of C).
 //!
-//! **Use Case**: Development builds (-O0, -O1) for fast iteration
-//! **Not for**: Production releases (use LLVM with -O2, -O3)
+//! **Use Case**: Development builds (-O0, -O1) and optimized builds (-O2) for fast iteration
+//! **Not for**: Maximum optimization (use LLVM with -O3)
 
 mod compiler;
 mod translator;
@@ -19,7 +19,7 @@ use fastforth_frontend::ssa::{SSAFunction, SSAInstruction, Register, BlockId};
 /// Compilation settings for Cranelift
 #[derive(Debug, Clone, Copy)]
 pub struct CraneliftSettings {
-    /// Optimization level (0 = no opts, 1 = basic opts)
+    /// Optimization level (0 = none, 1 = speed, 2 = speed_and_size)
     pub opt_level: u8,
     /// Enable debug info generation
     pub debug_info: bool,
@@ -52,6 +52,15 @@ impl CraneliftSettings {
         Self {
             opt_level: 1,
             debug_info: true,
+            target_triple: None,
+        }
+    }
+
+    /// Create settings for maximum Cranelift optimization (speed_and_size)
+    pub fn maximum() -> Self {
+        Self {
+            opt_level: 2,
+            debug_info: false,
             target_triple: None,
         }
     }
