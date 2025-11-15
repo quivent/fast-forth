@@ -96,26 +96,34 @@ impl CompilationPipeline {
 
         debug!("Frontend complete: {} definitions", stats.definitions_count);
 
-        // Phase 2: Convert SSA to Optimizer IR
-        let ir = self.convert_to_ir(&ssa_functions)?;
-        stats.instructions_before = self.count_instructions(&ir);
-
-        // Phase 3: Optimization
-        let optimization_start = Instant::now();
-        let optimized_ir = self.run_optimizer(ir)?;
-        stats.optimization_time_ms = optimization_start.elapsed().as_millis() as u64;
-        stats.instructions_after = self.count_instructions(&optimized_ir);
-
-        info!(
-            "Optimization reduced instructions by {:.1}%",
-            stats.optimization_savings() * 100.0
-        );
-
-        // Phase 4: Backend code generation
+        // Phase 2-4: Backend code generation
+        // JIT mode: Skip optimization for faster compilation
+        // AOT mode: Use full optimization pipeline
         let backend_start = Instant::now();
         let result = match mode {
-            CompilationMode::AOT => self.compile_aot(&optimized_ir, &mut stats)?,
-            CompilationMode::JIT => self.compile_jit(&ssa_functions, &mut stats)?,
+            CompilationMode::JIT => {
+                debug!("JIT mode: Skipping optimization for fast compilation");
+                self.compile_jit(&ssa_functions, &mut stats)?
+            }
+            CompilationMode::AOT => {
+                // Phase 2: Convert SSA to Optimizer IR
+                let ir = self.convert_to_ir(&ssa_functions)?;
+                stats.instructions_before = self.count_instructions(&ir);
+
+                // Phase 3: Optimization
+                let optimization_start = Instant::now();
+                let optimized_ir = self.run_optimizer(ir)?;
+                stats.optimization_time_ms = optimization_start.elapsed().as_millis() as u64;
+                stats.instructions_after = self.count_instructions(&optimized_ir);
+
+                info!(
+                    "Optimization reduced instructions by {:.1}%",
+                    stats.optimization_savings() * 100.0
+                );
+
+                // Phase 4: AOT compilation
+                self.compile_aot(&optimized_ir, &mut stats)?
+            }
         };
         stats.backend_time_ms = backend_start.elapsed().as_millis() as u64;
 
