@@ -53,20 +53,26 @@ impl StackEffect {
 
     /// Compose two stack effects
     pub fn compose(&self, other: &StackEffect) -> Result<StackEffect, String> {
-        // Check if we have enough outputs to satisfy other's inputs
-        if self.outputs.len() < other.inputs.len() {
-            return Err(format!(
-                "Stack underflow: need {} items, have {}",
-                other.inputs.len(),
-                self.outputs.len()
-            ));
+        // If we don't have enough outputs to satisfy other's inputs,
+        // those inputs must come from our caller
+        let shortfall = if other.inputs.len() > self.outputs.len() {
+            other.inputs.len() - self.outputs.len()
+        } else {
+            0
+        };
+
+        // Build the new inputs: our inputs plus any shortfall
+        let mut inputs = self.inputs.clone();
+        if shortfall > 0 {
+            // Add the needed inputs from the beginning of other's inputs
+            for i in 0..shortfall {
+                inputs.push(other.inputs[i].clone());
+            }
         }
 
-        // Take inputs from self, outputs from other
-        let inputs = self.inputs.clone();
-
-        // Remaining outputs from self that aren't consumed by other
-        let remaining_outputs = self.outputs.len() - other.inputs.len();
+        // Build the new outputs
+        let consumed_from_self = self.outputs.len().min(other.inputs.len());
+        let remaining_outputs = self.outputs.len() - consumed_from_self;
         let mut outputs: Vec<StackType> = self.outputs[..remaining_outputs].to_vec();
         outputs.extend(other.outputs.clone());
 

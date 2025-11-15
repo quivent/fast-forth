@@ -33,9 +33,10 @@ pub enum SSAInstruction {
         value: f64,
     },
 
-    /// Load a string literal
+    /// Load a string literal (ANS Forth: pushes addr and len)
     LoadString {
-        dest: Register,
+        dest_addr: Register,   // String address
+        dest_len: Register,    // String length
         value: String,
     },
 
@@ -356,12 +357,16 @@ impl SSAConverter {
             }
 
             Word::StringLiteral(value) => {
-                let dest = self.fresh_register();
+                let dest_addr = self.fresh_register();
+                let dest_len = self.fresh_register();
                 self.emit(SSAInstruction::LoadString {
-                    dest,
+                    dest_addr,
+                    dest_len,
                     value: value.clone(),
                 });
-                stack.push(dest);
+                // Push both address and length (ANS Forth convention)
+                stack.push(dest_addr);
+                stack.push(dest_len);
             }
 
             Word::WordRef { name, .. } => {
@@ -597,38 +602,58 @@ impl SSAConverter {
             }
 
             // File mode constants (ANS Forth)
+            // These push fopen-compatible mode strings (addr len)
             "r/o" => {
-                // Read-only mode = 0
-                let dest = self.fresh_register();
-                self.emit(SSAInstruction::LoadInt { dest, value: 0 });
-                stack.push(dest);
+                // Read-only mode = "r"
+                let dest_addr = self.fresh_register();
+                let dest_len = self.fresh_register();
+                self.emit(SSAInstruction::LoadString {
+                    dest_addr,
+                    dest_len,
+                    value: "r".to_string(),
+                });
+                stack.push(dest_addr);
+                stack.push(dest_len);
                 Ok(())
             }
             "w/o" => {
-                // Write-only mode = 1
-                let dest = self.fresh_register();
-                self.emit(SSAInstruction::LoadInt { dest, value: 1 });
-                stack.push(dest);
+                // Write-only mode = "w"
+                let dest_addr = self.fresh_register();
+                let dest_len = self.fresh_register();
+                self.emit(SSAInstruction::LoadString {
+                    dest_addr,
+                    dest_len,
+                    value: "w".to_string(),
+                });
+                stack.push(dest_addr);
+                stack.push(dest_len);
                 Ok(())
             }
             "r/w" => {
-                // Read-write mode = 2
-                let dest = self.fresh_register();
-                self.emit(SSAInstruction::LoadInt { dest, value: 2 });
-                stack.push(dest);
+                // Read-write mode = "r+"
+                let dest_addr = self.fresh_register();
+                let dest_len = self.fresh_register();
+                self.emit(SSAInstruction::LoadString {
+                    dest_addr,
+                    dest_len,
+                    value: "r+".to_string(),
+                });
+                stack.push(dest_addr);
+                stack.push(dest_len);
                 Ok(())
             }
 
             // File I/O operations (ANS Forth File Access word set)
             "create-file" => {
-                // Stack effect: ( c-addr u fam -- fileid ior )
-                if stack.len() < 3 {
+                // Stack effect: ( path-addr path-len mode-addr mode-len -- fileid ior )
+                if stack.len() < 4 {
                     return Err(ForthError::StackUnderflow {
                         word: "create-file".to_string(),
-                        expected: 3,
+                        expected: 4,
                         found: stack.len(),
                     });
                 }
+                let mode_len = stack.pop().unwrap();
                 let mode = stack.pop().unwrap();
                 let path_len = stack.pop().unwrap();
                 let path_addr = stack.pop().unwrap();
@@ -650,14 +675,15 @@ impl SSAConverter {
             }
 
             "open-file" => {
-                // Stack effect: ( c-addr u fam -- fileid ior )
-                if stack.len() < 3 {
+                // Stack effect: ( path-addr path-len mode-addr mode-len -- fileid ior )
+                if stack.len() < 4 {
                     return Err(ForthError::StackUnderflow {
                         word: "open-file".to_string(),
-                        expected: 3,
+                        expected: 4,
                         found: stack.len(),
                     });
                 }
+                let mode_len = stack.pop().unwrap();
                 let mode = stack.pop().unwrap();
                 let path_len = stack.pop().unwrap();
                 let path_addr = stack.pop().unwrap();
@@ -1136,8 +1162,21 @@ impl SSAConverter {
         // Convert function body
         self.convert_sequence(&def.body, &mut stack)?;
 
-        // Emit return
-        let return_values = SmallVec::from_vec(stack);
+        // Emit return - ensure we always return at least one value (0 if stack is empty)
+        // This matches Cranelift backend expectation that all Forth functions return i64
+        let return_values = if stack.is_empty() {
+            // Stack is empty - return 0 as default
+            let zero_reg = self.fresh_register();
+            self.emit(SSAInstruction::LoadInt {
+                dest: zero_reg,
+                value: 0,
+            });
+            smallvec::smallvec![zero_reg]
+        } else {
+            // Return top of stack (or all values for multi-return functions)
+            SmallVec::from_vec(stack)
+        };
+
         self.emit(SSAInstruction::Return {
             values: return_values,
         });
@@ -1302,7 +1341,9 @@ fn format_instruction(inst: &SSAInstruction) -> String {
     match inst {
         SSAInstruction::LoadInt { dest, value } => format!("{} = load {}", dest, value),
         SSAInstruction::LoadFloat { dest, value } => format!("{} = load {}", dest, value),
-        SSAInstruction::LoadString { dest, value } => format!("{} = load \"{}\"", dest, value),
+        SSAInstruction::LoadString { dest_addr, dest_len, value } => {
+            format!("{}, {} = load_string \"{}\"", dest_addr, dest_len, value)
+        }
         SSAInstruction::BinaryOp {
             dest,
             op,

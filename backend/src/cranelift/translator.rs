@@ -369,12 +369,49 @@ impl<'a> SSATranslator<'a> {
                 // Just skip this instruction - nothing to do here.
             }
 
-            SSAInstruction::LoadString { dest, value } => {
-                // String handling requires more complex setup
-                // For now, we'll return an error
-                return Err(BackendError::CodeGeneration(
-                    "String literals not yet supported in Cranelift backend".to_string()
-                ));
+            SSAInstruction::LoadString { dest_addr, dest_len, value } => {
+                // For now, implement a simplified version that uses runtime allocation
+                // This calls malloc to allocate memory for the string
+
+                let len = value.len() as i64;
+                let len_val = self.builder.ins().iconst(types::I64, len);
+                self.register_values.insert(*dest_len, len_val);
+
+                // Allocate memory using malloc (len + 1 for null terminator)
+                let malloc_ref = self.ffi_refs.get("malloc")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "malloc not found (required for string literals)".to_string()
+                    ))?;
+
+                let alloc_size = self.builder.ins().iconst(types::I64, len + 1);
+                let call = self.builder.ins().call(malloc_ref, &[alloc_size]);
+                let addr = self.builder.inst_results(call)[0];
+                self.register_values.insert(*dest_addr, addr);
+
+                // Store each byte of the string
+                for (i, &byte) in value.as_bytes().iter().enumerate() {
+                    let byte_val = self.builder.ins().iconst(types::I8, byte as i64);
+                    let offset = self.builder.ins().iconst(types::I64, i as i64);
+                    let byte_addr = self.builder.ins().iadd(addr, offset);
+                    self.builder.ins().store(
+                        cranelift_codegen::ir::MemFlags::new(),
+                        byte_val,
+                        byte_addr,
+                        0,
+                    );
+                }
+
+                // Add null terminator
+                let null = self.builder.ins().iconst(types::I8, 0);
+                let null_offset = self.builder.ins().iconst(types::I64, len);
+                let null_addr = self.builder.ins().iadd(addr, null_offset);
+                self.builder.ins().store(
+                    cranelift_codegen::ir::MemFlags::new(),
+                    null,
+                    null_addr,
+                    0,
+                );
             }
 
             // FFI and File I/O Operations

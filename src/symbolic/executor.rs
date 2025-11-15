@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_symbolic_square() {
-        let program = parse_program(": square dup * ;").unwrap();
+        let program = parse_program(": square dup * ; square").unwrap();
         let mut executor = SymbolicExecutor::new();
 
         executor.initialize_inputs(1);

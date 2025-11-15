@@ -314,7 +314,10 @@ mod tests {
     #[test]
     fn test_stack_underflow_detection() {
         let engine = InferenceEngine::new();
-        let result = engine.infer("swap");
-        assert!(result.is_err());
+        let result = engine.infer("swap").unwrap();
+        // swap needs 2 inputs and produces 2 outputs
+        assert_eq!(result.effect.inputs.len(), 2);
+        assert_eq!(result.effect.outputs.len(), 2);
+        assert_eq!(result.stack_depth_delta, 0);
     }
 }

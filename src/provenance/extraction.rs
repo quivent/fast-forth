@@ -18,15 +18,17 @@ pub fn extract_provenance(source: &str) -> Result<HashMap<String, ProvenanceMeta
 
         // Check for word definition start
         if trimmed.starts_with(": ") {
-            // If we have pending metadata, associate it with the word
-            if let (Some(word), Some(metadata)) = (current_word.take(), current_metadata.take()) {
-                metadata_map.insert(word, metadata);
+            // If we have a previous word without metadata, save it
+            if let Some(word) = current_word.take() {
+                if let Some(metadata) = current_metadata.take() {
+                    metadata_map.insert(word, metadata);
+                }
             }
 
-            // Extract word name
+            // Extract word name and keep any accumulated metadata
             if let Some(word_name) = trimmed.split_whitespace().nth(1) {
                 current_word = Some(word_name.to_string());
-                current_metadata = None;
+                // Don't reset current_metadata - keep any metadata from preceding comments
             }
         }
 

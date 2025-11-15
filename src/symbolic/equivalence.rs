@@ -168,7 +168,8 @@ mod tests {
         let right = parse_program(": triple 3 * ;").unwrap();
 
         let checker = EquivalenceChecker::new();
-        let result = checker.check_programs(&left, &right);
+        // Compare the actual definitions, not the programs
+        let result = checker.check_definitions(&left.definitions[0], &right.definitions[0]);
 
         assert!(!result.equivalent);
     }
