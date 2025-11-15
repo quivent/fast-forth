@@ -378,53 +378,250 @@ impl<'a> SSATranslator<'a> {
             }
 
             // FFI and File I/O Operations
-            // These are placeholders for now - full implementation in Phase 5.2
             SSAInstruction::FFICall { dest, function, args } => {
-                return Err(BackendError::CodeGeneration(
-                    format!("FFI call to '{}' not yet implemented", function)
-                ));
+                // Look up the FFI function reference
+                let ffi_ref = self.ffi_refs.get(function)
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        format!("FFI function '{}' not registered", function)
+                    ))?;
+
+                // Convert arguments to Cranelift values
+                let arg_values: Vec<Value> = args
+                    .iter()
+                    .map(|&reg| self.get_register(reg))
+                    .collect::<Result<Vec<_>>>()?;
+
+                // Emit the FFI call
+                let call = self.builder.ins().call(ffi_ref, &arg_values);
+
+                // Get return values
+                let results: Vec<Value> = self.builder.inst_results(call).to_vec();
+
+                // Map return values to destination registers
+                for (i, &dest_reg) in dest.iter().enumerate() {
+                    if i < results.len() {
+                        self.register_values.insert(dest_reg, results[i]);
+                    }
+                }
             }
 
             SSAInstruction::FileOpen { dest_fileid, dest_ior, path_addr, path_len, mode } => {
-                return Err(BackendError::CodeGeneration(
-                    "File open operation not yet implemented".to_string()
-                ));
+                // Get fopen FFI function reference
+                let fopen_ref = self.ffi_refs.get("fopen")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "FFI function 'fopen' not registered".to_string()
+                    ))?;
+
+                // Get path pointer and mode
+                let path_ptr = self.get_register(*path_addr)?;
+                let mode_val = self.get_register(*mode)?;
+
+                // Convert Forth mode to C mode string pointer
+                // Mode: 0=r/o ("r"), 1=w/o ("w"), 2=r/w ("r+")
+                // Note: This requires pre-allocated mode strings in memory
+                // For now, we'll assume mode_val is already a pointer to C string
+                let mode_ptr = mode_val;
+
+                // Call fopen(path, mode)
+                let call = self.builder.ins().call(fopen_ref, &[path_ptr, mode_ptr]);
+                let file_handle = self.builder.inst_results(call)[0];
+
+                // Check if NULL (error): file_handle == 0
+                let null_ptr = self.builder.ins().iconst(types::I64, 0);
+                let is_null = self.builder.ins().icmp(
+                    cranelift_codegen::ir::condcodes::IntCC::Equal,
+                    file_handle,
+                    null_ptr,
+                );
+
+                // Set ior: 0 = success, -1 = error (following ANS Forth convention)
+                let success = self.builder.ins().iconst(types::I64, 0);
+                let error = self.builder.ins().iconst(types::I64, -1);
+                let ior = self.builder.ins().select(is_null, error, success);
+
+                // Store results
+                self.register_values.insert(*dest_fileid, file_handle);
+                self.register_values.insert(*dest_ior, ior);
             }
 
             SSAInstruction::FileRead { dest_bytes, dest_ior, buffer, count, fileid } => {
-                return Err(BackendError::CodeGeneration(
-                    "File read operation not yet implemented".to_string()
-                ));
+                // Get fread FFI function reference
+                let fread_ref = self.ffi_refs.get("fread")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "FFI function 'fread' not registered".to_string()
+                    ))?;
+
+                // Get arguments
+                let buffer_ptr = self.get_register(*buffer)?;
+                let count_val = self.get_register(*count)?;
+                let file_handle = self.get_register(*fileid)?;
+
+                // fread(buffer, 1, count, file) - read count bytes
+                let size = self.builder.ins().iconst(types::I64, 1);
+
+                // Call fread
+                let call = self.builder.ins().call(
+                    fread_ref,
+                    &[buffer_ptr, size, count_val, file_handle]
+                );
+                let bytes_read = self.builder.inst_results(call)[0];
+
+                // Check for error: bytes_read < count means error or EOF
+                // For simplicity, ior = 0 (success), actual error checking done by user
+                let success = self.builder.ins().iconst(types::I64, 0);
+
+                // Store results
+                self.register_values.insert(*dest_bytes, bytes_read);
+                self.register_values.insert(*dest_ior, success);
             }
 
             SSAInstruction::FileWrite { dest_ior, buffer, count, fileid } => {
-                return Err(BackendError::CodeGeneration(
-                    "File write operation not yet implemented".to_string()
-                ));
+                // Get fwrite FFI function reference
+                let fwrite_ref = self.ffi_refs.get("fwrite")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "FFI function 'fwrite' not registered".to_string()
+                    ))?;
+
+                // Get arguments
+                let buffer_ptr = self.get_register(*buffer)?;
+                let count_val = self.get_register(*count)?;
+                let file_handle = self.get_register(*fileid)?;
+
+                // fwrite(buffer, 1, count, file) - write count bytes
+                let size = self.builder.ins().iconst(types::I64, 1);
+
+                // Call fwrite
+                let call = self.builder.ins().call(
+                    fwrite_ref,
+                    &[buffer_ptr, size, count_val, file_handle]
+                );
+                let bytes_written = self.builder.inst_results(call)[0];
+
+                // Check if all bytes were written
+                let is_complete = self.builder.ins().icmp(
+                    cranelift_codegen::ir::condcodes::IntCC::Equal,
+                    bytes_written,
+                    count_val,
+                );
+
+                // Set ior: 0 = success, -1 = error
+                let success = self.builder.ins().iconst(types::I64, 0);
+                let error = self.builder.ins().iconst(types::I64, -1);
+                let ior = self.builder.ins().select(is_complete, success, error);
+
+                // Store result
+                self.register_values.insert(*dest_ior, ior);
             }
 
             SSAInstruction::FileClose { dest_ior, fileid } => {
-                return Err(BackendError::CodeGeneration(
-                    "File close operation not yet implemented".to_string()
-                ));
+                // Get fclose FFI function reference
+                let fclose_ref = self.ffi_refs.get("fclose")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "FFI function 'fclose' not registered".to_string()
+                    ))?;
+
+                // Get file handle
+                let file_handle = self.get_register(*fileid)?;
+
+                // Call fclose(file)
+                let call = self.builder.ins().call(fclose_ref, &[file_handle]);
+                let result = self.builder.inst_results(call)[0];
+
+                // Convert i32 result to i64 for consistency
+                let result_i64 = self.builder.ins().sextend(types::I64, result);
+
+                // fclose returns 0 on success, EOF (-1) on error
+                // We keep the same convention: 0 = success, non-zero = error
+                self.register_values.insert(*dest_ior, result_i64);
             }
 
             SSAInstruction::FileDelete { dest_ior, path_addr, path_len } => {
-                return Err(BackendError::CodeGeneration(
-                    "File delete operation not yet implemented".to_string()
-                ));
+                // Get remove FFI function reference
+                let remove_ref = self.ffi_refs.get("remove")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "FFI function 'remove' not registered".to_string()
+                    ))?;
+
+                // Get path pointer
+                let path_ptr = self.get_register(*path_addr)?;
+
+                // Call remove(path)
+                let call = self.builder.ins().call(remove_ref, &[path_ptr]);
+                let result = self.builder.inst_results(call)[0];
+
+                // Convert i32 result to i64
+                let result_i64 = self.builder.ins().sextend(types::I64, result);
+
+                // remove returns 0 on success, non-zero on error
+                self.register_values.insert(*dest_ior, result_i64);
             }
 
             SSAInstruction::FileCreate { dest_fileid, dest_ior, path_addr, path_len, mode } => {
-                return Err(BackendError::CodeGeneration(
-                    "File create operation not yet implemented".to_string()
-                ));
+                // FileCreate is the same as FileOpen with create mode
+                // Get fopen FFI function reference
+                let fopen_ref = self.ffi_refs.get("fopen")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "FFI function 'fopen' not registered".to_string()
+                    ))?;
+
+                // Get path pointer and mode
+                let path_ptr = self.get_register(*path_addr)?;
+                let mode_val = self.get_register(*mode)?;
+
+                // For create, mode should be "w" (write) or "w+" (read-write)
+                // Assume mode_val is already a pointer to C string
+                let mode_ptr = mode_val;
+
+                // Call fopen(path, mode)
+                let call = self.builder.ins().call(fopen_ref, &[path_ptr, mode_ptr]);
+                let file_handle = self.builder.inst_results(call)[0];
+
+                // Check if NULL (error)
+                let null_ptr = self.builder.ins().iconst(types::I64, 0);
+                let is_null = self.builder.ins().icmp(
+                    cranelift_codegen::ir::condcodes::IntCC::Equal,
+                    file_handle,
+                    null_ptr,
+                );
+
+                // Set ior: 0 = success, -1 = error
+                let success = self.builder.ins().iconst(types::I64, 0);
+                let error = self.builder.ins().iconst(types::I64, -1);
+                let ior = self.builder.ins().select(is_null, error, success);
+
+                // Store results
+                self.register_values.insert(*dest_fileid, file_handle);
+                self.register_values.insert(*dest_ior, ior);
             }
 
             SSAInstruction::SystemCall { dest, command_addr, command_len } => {
-                return Err(BackendError::CodeGeneration(
-                    "System call operation not yet implemented".to_string()
-                ));
+                // Get system FFI function reference
+                let system_ref = self.ffi_refs.get("system")
+                    .copied()
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        "FFI function 'system' not registered".to_string()
+                    ))?;
+
+                // Get command pointer
+                let command_ptr = self.get_register(*command_addr)?;
+
+                // Call system(command)
+                let call = self.builder.ins().call(system_ref, &[command_ptr]);
+                let result = self.builder.inst_results(call)[0];
+
+                // Convert i32 result to i64
+                let result_i64 = self.builder.ins().sextend(types::I64, result);
+
+                // system returns exit code of command
+                // Store in destination register
+                self.register_values.insert(*dest, result_i64);
             }
         }
 

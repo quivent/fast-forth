@@ -56,6 +56,15 @@ impl SemanticAnalyzer {
             "do", "loop", "+loop", "leave", "exit",
             // Return stack
             ">r", "r>", "r@",
+            // File I/O (ANS Forth File Access word set)
+            "create-file", "open-file", "close-file",
+            "read-file", "write-file", "delete-file",
+            "file-size", "file-position", "reposition-file",
+            "resize-file", "flush-file",
+            "r/o", "w/o", "r/w",  // File access modes
+            "bin", // Binary mode flag
+            // System operations
+            "system",
             // Other
             "here", "allot", "execute", "char",
             "within", "sm/rem", "fm/mod",

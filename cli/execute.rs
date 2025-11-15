@@ -7,23 +7,12 @@ use std::path::Path;
 
 /// Execute a Forth program with JIT compilation
 pub fn execute_program(source: &str, verbose: bool) -> Result<i64> {
-    eprintln!("[DEBUG] execute_program called, source len={}, verbose={}", source.len(), verbose);
-
     // Phase 1: Parse
     if verbose {
         println!("  Parsing...");
     }
-    eprintln!("[DEBUG] Starting parse...");
-    let program = match parse_program(source) {
-        Ok(p) => {
-            eprintln!("[DEBUG] Parse successful!");
-            p
-        }
-        Err(e) => {
-            eprintln!("[DEBUG] Parse failed: {:?}", e);
-            return Err(anyhow::anyhow!("Failed to parse: {}", e));
-        }
-    };
+    let program = parse_program(source)
+        .map_err(|e| anyhow::anyhow!("Failed to parse: {}", e))?;
 
     if verbose {
         println!("  Parsed {} definitions", program.definitions.len());
@@ -33,17 +22,8 @@ pub fn execute_program(source: &str, verbose: bool) -> Result<i64> {
     if verbose {
         println!("  Converting to SSA...");
     }
-    eprintln!("[DEBUG] Converting to SSA...");
-    let ssa_functions = match convert_to_ssa(&program) {
-        Ok(funcs) => {
-            eprintln!("[DEBUG] SSA conversion successful, got {} functions", funcs.len());
-            funcs
-        }
-        Err(e) => {
-            eprintln!("[DEBUG] SSA conversion failed: {:?}", e);
-            return Err(anyhow::anyhow!("Failed to convert to SSA: {}", e));
-        }
-    };
+    let ssa_functions = convert_to_ssa(&program)
+        .map_err(|e| anyhow::anyhow!("Failed to convert to SSA: {}", e))?;
 
     if verbose {
         println!("  Generated {} SSA functions", ssa_functions.len());
@@ -71,36 +51,16 @@ pub fn execute_program(source: &str, verbose: bool) -> Result<i64> {
         .collect();
 
     // Pass 1: Declare all functions
-    eprintln!("[DEBUG] Pass 1: Declaring {} functions", functions_with_names.len());
     backend.declare_all_functions(&functions_with_names)
         .context("Failed to declare functions")?;
 
     // Pass 2: Compile all function bodies (can now reference each other)
-    eprintln!("[DEBUG] Pass 2: Compiling function bodies");
     for (name, func) in &functions_with_names {
-        eprintln!("[DEBUG] Compiling function: {}", name);
-        eprintln!("[DEBUG]   Entry block: {:?}", func.entry_block);
-        eprintln!("[DEBUG]   Parameters: {:?}", func.parameters);
-        eprintln!("[DEBUG]   Blocks: {}", func.blocks.len());
-        for (i, block) in func.blocks.iter().enumerate() {
-            eprintln!("[DEBUG]     Block {}: {:?} with {} instructions", i, block.id, block.instructions.len());
-            for inst in &block.instructions {
-                eprintln!("[DEBUG]       {:?}", inst);
-            }
-        }
-        match backend.compile_function(func, name) {
-            Ok(_) => {
-                eprintln!("[DEBUG] Successfully compiled {}", name);
-            }
-            Err(e) => {
-                eprintln!("[DEBUG] Compilation error for {}: {:?}", name, e);
-                return Err(anyhow::anyhow!("Failed to compile function {}: {}", name, e));
-            }
-        }
+        backend.compile_function(func, name)
+            .with_context(|| format!("Failed to compile function {}", name))?;
     }
 
     // Finalize all functions (must be done after all are compiled for recursion to work)
-    eprintln!("[DEBUG] Finalizing all functions");
     backend.finalize_all()
         .context("Failed to finalize functions")?;
 
@@ -115,19 +75,15 @@ pub fn execute_program(source: &str, verbose: bool) -> Result<i64> {
 
     // Get the last compiled function (which will be :main if top-level code exists)
     if ssa_functions.is_empty() {
-        eprintln!("[DEBUG] No functions to execute (empty program)");
         return Ok(0);
     }
 
     // Execute the last function (usually :main if top-level code exists)
     let func_name = &ssa_functions.last().unwrap().name;
     let return_count = 1; // All Forth functions return 1 value
-    eprintln!("[DEBUG] Executing function: {} (expects {} return values)", func_name, return_count);
 
     let main_func_ptr = backend.get_function(func_name)
         .ok_or_else(|| anyhow::anyhow!("Failed to get compiled function"))?;
-
-    eprintln!("[DEBUG] Calling JIT function at {:?}", main_func_ptr);
 
     // Call function based on its return count
     let result = match return_count {
@@ -148,10 +104,6 @@ pub fn execute_program(source: &str, verbose: bool) -> Result<i64> {
             return Err(anyhow::anyhow!("Functions with multiple return values not yet supported in execute harness"));
         }
     };
-
-    eprintln!("[DEBUG] Execution complete, result: {}", result);
-
-    eprintln!("[DEBUG] Top of stack: {}", result);
 
     Ok(result)
 }

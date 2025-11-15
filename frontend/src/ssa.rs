@@ -596,6 +596,213 @@ impl SSAConverter {
                 }
             }
 
+            // File mode constants (ANS Forth)
+            "r/o" => {
+                // Read-only mode = 0
+                let dest = self.fresh_register();
+                self.emit(SSAInstruction::LoadInt { dest, value: 0 });
+                stack.push(dest);
+                Ok(())
+            }
+            "w/o" => {
+                // Write-only mode = 1
+                let dest = self.fresh_register();
+                self.emit(SSAInstruction::LoadInt { dest, value: 1 });
+                stack.push(dest);
+                Ok(())
+            }
+            "r/w" => {
+                // Read-write mode = 2
+                let dest = self.fresh_register();
+                self.emit(SSAInstruction::LoadInt { dest, value: 2 });
+                stack.push(dest);
+                Ok(())
+            }
+
+            // File I/O operations (ANS Forth File Access word set)
+            "create-file" => {
+                // Stack effect: ( c-addr u fam -- fileid ior )
+                if stack.len() < 3 {
+                    return Err(ForthError::StackUnderflow {
+                        word: "create-file".to_string(),
+                        expected: 3,
+                        found: stack.len(),
+                    });
+                }
+                let mode = stack.pop().unwrap();
+                let path_len = stack.pop().unwrap();
+                let path_addr = stack.pop().unwrap();
+
+                let dest_fileid = self.fresh_register();
+                let dest_ior = self.fresh_register();
+
+                self.emit(SSAInstruction::FileCreate {
+                    dest_fileid,
+                    dest_ior,
+                    path_addr,
+                    path_len,
+                    mode,
+                });
+
+                stack.push(dest_fileid);
+                stack.push(dest_ior);
+                Ok(())
+            }
+
+            "open-file" => {
+                // Stack effect: ( c-addr u fam -- fileid ior )
+                if stack.len() < 3 {
+                    return Err(ForthError::StackUnderflow {
+                        word: "open-file".to_string(),
+                        expected: 3,
+                        found: stack.len(),
+                    });
+                }
+                let mode = stack.pop().unwrap();
+                let path_len = stack.pop().unwrap();
+                let path_addr = stack.pop().unwrap();
+
+                let dest_fileid = self.fresh_register();
+                let dest_ior = self.fresh_register();
+
+                self.emit(SSAInstruction::FileOpen {
+                    dest_fileid,
+                    dest_ior,
+                    path_addr,
+                    path_len,
+                    mode,
+                });
+
+                stack.push(dest_fileid);
+                stack.push(dest_ior);
+                Ok(())
+            }
+
+            "read-file" => {
+                // Stack effect: ( c-addr u fileid -- u ior )
+                if stack.len() < 3 {
+                    return Err(ForthError::StackUnderflow {
+                        word: "read-file".to_string(),
+                        expected: 3,
+                        found: stack.len(),
+                    });
+                }
+                let fileid = stack.pop().unwrap();
+                let count = stack.pop().unwrap();
+                let buffer = stack.pop().unwrap();
+
+                let dest_bytes = self.fresh_register();
+                let dest_ior = self.fresh_register();
+
+                self.emit(SSAInstruction::FileRead {
+                    dest_bytes,
+                    dest_ior,
+                    buffer,
+                    count,
+                    fileid,
+                });
+
+                stack.push(dest_bytes);
+                stack.push(dest_ior);
+                Ok(())
+            }
+
+            "write-file" => {
+                // Stack effect: ( c-addr u fileid -- ior )
+                if stack.len() < 3 {
+                    return Err(ForthError::StackUnderflow {
+                        word: "write-file".to_string(),
+                        expected: 3,
+                        found: stack.len(),
+                    });
+                }
+                let fileid = stack.pop().unwrap();
+                let count = stack.pop().unwrap();
+                let buffer = stack.pop().unwrap();
+
+                let dest_ior = self.fresh_register();
+
+                self.emit(SSAInstruction::FileWrite {
+                    dest_ior,
+                    buffer,
+                    count,
+                    fileid,
+                });
+
+                stack.push(dest_ior);
+                Ok(())
+            }
+
+            "close-file" => {
+                // Stack effect: ( fileid -- ior )
+                if stack.is_empty() {
+                    return Err(ForthError::StackUnderflow {
+                        word: "close-file".to_string(),
+                        expected: 1,
+                        found: 0,
+                    });
+                }
+                let fileid = stack.pop().unwrap();
+                let dest_ior = self.fresh_register();
+
+                self.emit(SSAInstruction::FileClose {
+                    dest_ior,
+                    fileid,
+                });
+
+                stack.push(dest_ior);
+                Ok(())
+            }
+
+            "delete-file" => {
+                // Stack effect: ( c-addr u -- ior )
+                if stack.len() < 2 {
+                    return Err(ForthError::StackUnderflow {
+                        word: "delete-file".to_string(),
+                        expected: 2,
+                        found: stack.len(),
+                    });
+                }
+                let path_len = stack.pop().unwrap();
+                let path_addr = stack.pop().unwrap();
+
+                let dest_ior = self.fresh_register();
+
+                self.emit(SSAInstruction::FileDelete {
+                    dest_ior,
+                    path_addr,
+                    path_len,
+                });
+
+                stack.push(dest_ior);
+                Ok(())
+            }
+
+            // System call
+            "system" => {
+                // Stack effect: ( c-addr u -- return-code )
+                if stack.len() < 2 {
+                    return Err(ForthError::StackUnderflow {
+                        word: "system".to_string(),
+                        expected: 2,
+                        found: stack.len(),
+                    });
+                }
+                let command_len = stack.pop().unwrap();
+                let command_addr = stack.pop().unwrap();
+
+                let dest = self.fresh_register();
+
+                self.emit(SSAInstruction::SystemCall {
+                    dest,
+                    command_addr,
+                    command_len,
+                });
+
+                stack.push(dest);
+                Ok(())
+            }
+
             // Loop index word
             "i" | "j" => {
                 // Loop index - pushes current loop counter
