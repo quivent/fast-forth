@@ -1,0 +1,239 @@
+#!/bin/bash
+# FastForth Llama CLI - Hybrid wrapper using FastForth + curl
+# This is a transitional solution until FFI support is implemented
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FASTFORTH_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+FASTFORTH_BIN="$FASTFORTH_ROOT/target/release/fastforth"
+
+# Default configuration
+OLLAMA_HOST="${OLLAMA_HOST:-http://localhost:11434}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+TEMP_DIR="${TMPDIR:-/tmp}"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Print usage
+usage() {
+    cat << EOF
+FastForth Llama CLI - AI-powered Forth development assistant
+
+Usage:
+  $(basename "$0") "your prompt here"
+  $(basename "$0") -f file.txt
+  $(basename "$0") -i  (interactive mode)
+
+Options:
+  -m MODEL    Set Ollama model (default: llama3.2)
+  -h HOST     Set Ollama host (default: http://localhost:11434)
+  -s          Stream response (not yet implemented)
+  -v          Verbose mode
+  -f FILE     Read prompt from file
+  -i          Interactive mode
+  --help      Show this help
+
+Environment Variables:
+  OLLAMA_HOST    Ollama API endpoint (default: http://localhost:11434)
+  OLLAMA_MODEL   Model to use (default: llama3.2)
+
+Examples:
+  # Simple query
+  $(basename "$0") "What is recursion?"
+
+  # Use different model
+  $(basename "$0") -m codellama "Explain Forth stack operations"
+
+  # Interactive mode
+  $(basename "$0") -i
+
+  # Read from file
+  $(basename "$0") -f my-question.txt
+
+Note: This version uses curl for HTTP. Future versions will use
+      FastForth's native FFI when implemented.
+EOF
+    exit 0
+}
+
+# Check dependencies
+check_dependencies() {
+    if ! command -v curl &> /dev/null; then
+        echo -e "${RED}Error: curl not found. Please install curl.${NC}" >&2
+        exit 1
+    fi
+
+    if [ ! -f "$FASTFORTH_BIN" ]; then
+        echo -e "${YELLOW}Warning: FastForth binary not found at $FASTFORTH_BIN${NC}" >&2
+        echo -e "${YELLOW}Building FastForth...${NC}" >&2
+        cd "$FASTFORTH_ROOT" && cargo build --release || {
+            echo -e "${RED}Failed to build FastForth${NC}" >&2
+            exit 1
+        }
+    fi
+}
+
+# Call Ollama API
+call_ollama() {
+    local prompt="$1"
+    local model="${2:-$OLLAMA_MODEL}"
+    local temp_response="$TEMP_DIR/fastforth-llama-$$.json"
+
+    # Build JSON request
+    local json_request=$(cat <<EOF
+{
+  "model": "$model",
+  "prompt": "$prompt",
+  "stream": false
+}
+EOF
+)
+
+    # Make request
+    if [ "$VERBOSE" = "1" ]; then
+        echo -e "${BLUE}[DEBUG] Calling Ollama API: $OLLAMA_HOST/api/generate${NC}" >&2
+        echo -e "${BLUE}[DEBUG] Model: $model${NC}" >&2
+    fi
+
+    local http_code=$(curl -s -w "%{http_code}" -o "$temp_response" \
+        -X POST "$OLLAMA_HOST/api/generate" \
+        -H "Content-Type: application/json" \
+        -d "$json_request")
+
+    if [ "$http_code" != "200" ]; then
+        echo -e "${RED}Error: Ollama API returned HTTP $http_code${NC}" >&2
+        if [ -f "$temp_response" ]; then
+            cat "$temp_response" >&2
+        fi
+        rm -f "$temp_response"
+        return 1
+    fi
+
+    # Extract response using basic JSON parsing (jq if available, else grep)
+    if command -v jq &> /dev/null; then
+        cat "$temp_response" | jq -r '.response // .message // "No response"'
+    else
+        # Fallback: crude JSON extraction
+        grep -o '"response":"[^"]*"' "$temp_response" | sed 's/"response":"//;s/"$//' | sed 's/\\n/\n/g'
+    fi
+
+    rm -f "$temp_response"
+}
+
+# Interactive mode
+interactive_mode() {
+    echo -e "${GREEN}FastForth Llama - Interactive Mode${NC}"
+    echo "Type your prompts. Commands: /exit /help /model <name>"
+    echo ""
+
+    while true; do
+        echo -n "> "
+        read -r input
+
+        case "$input" in
+            /exit|/quit)
+                echo "Goodbye!"
+                exit 0
+                ;;
+            /help)
+                echo "Commands:"
+                echo "  /exit, /quit  - Exit interactive mode"
+                echo "  /model <name> - Switch model"
+                echo "  /clear        - Clear screen"
+                echo "  /help         - Show this help"
+                ;;
+            /model*)
+                OLLAMA_MODEL=$(echo "$input" | awk '{print $2}')
+                echo -e "${YELLOW}Switched to model: $OLLAMA_MODEL${NC}"
+                ;;
+            /clear)
+                clear
+                ;;
+            *)
+                if [ -n "$input" ]; then
+                    echo ""
+                    call_ollama "$input"
+                    echo ""
+                fi
+                ;;
+        esac
+    done
+}
+
+# Main
+main() {
+    local prompt=""
+    local from_file=""
+    local interactive=0
+
+    # Parse arguments
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --help)
+                usage
+                ;;
+            -m)
+                OLLAMA_MODEL="$2"
+                shift 2
+                ;;
+            -h)
+                OLLAMA_HOST="$2"
+                shift 2
+                ;;
+            -v)
+                VERBOSE=1
+                shift
+                ;;
+            -f)
+                from_file="$2"
+                shift 2
+                ;;
+            -i)
+                interactive=1
+                shift
+                ;;
+            -s)
+                echo -e "${YELLOW}Warning: Streaming not yet implemented${NC}" >&2
+                shift
+                ;;
+            *)
+                prompt="$1"
+                shift
+                ;;
+        esac
+    done
+
+    check_dependencies
+
+    # Interactive mode
+    if [ "$interactive" = "1" ]; then
+        interactive_mode
+    fi
+
+    # Read from file
+    if [ -n "$from_file" ]; then
+        if [ ! -f "$from_file" ]; then
+            echo -e "${RED}Error: File not found: $from_file${NC}" >&2
+            exit 1
+        fi
+        prompt=$(cat "$from_file")
+    fi
+
+    # Check if we have a prompt
+    if [ -z "$prompt" ]; then
+        echo -e "${RED}Error: No prompt provided${NC}" >&2
+        echo "Use --help for usage information"
+        exit 1
+    fi
+
+    # Execute
+    call_ollama "$prompt"
+}
+
+main "$@"
