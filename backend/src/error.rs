@@ -1,4 +1,4 @@
-//! Error types for the LLVM backend
+//! Error types for the backend (LLVM, Cranelift, etc.)
 
 use thiserror::Error;
 
@@ -20,6 +20,12 @@ pub enum BackendError {
 
     #[error("Code generation error: {0}")]
     CodeGenError(String),
+
+    #[error("Code generation failed: {0}")]
+    CodeGeneration(String),
+
+    #[error("Backend initialization failed: {0}")]
+    Initialization(String),
 
     #[error("Target machine creation failed: {0}")]
     TargetMachineError(String),

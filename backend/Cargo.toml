@@ -9,6 +9,13 @@ license.workspace = true
 # LLVM bindings (optional for now - backend in progress)
 inkwell = { version = "0.4", features = ["llvm16-0"], optional = true }
 
+# Cranelift code generator (fast compilation)
+cranelift-codegen = { workspace = true, optional = true }
+cranelift-frontend = { version = "0.102", optional = true }
+cranelift-module = { version = "0.102", optional = true }
+cranelift-jit = { version = "0.102", optional = true }
+target-lexicon = { version = "0.12", optional = true }
+
 # Frontend integration
 fastforth-frontend = { path = "../frontend" }
 
@@ -21,8 +28,9 @@ hashbrown = "0.14"
 smallvec = "1.11"
 
 [features]
-default = []
+default = ["cranelift"]
 llvm = ["inkwell"]
+cranelift = ["cranelift-codegen", "cranelift-frontend", "cranelift-module", "cranelift-jit", "target-lexicon"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

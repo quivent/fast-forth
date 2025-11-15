@@ -33,6 +33,10 @@ pub enum CompileError {
     #[error("Code generation error: {0}")]
     CodeGenError(String),
 
+    /// Backend error (LLVM, Cranelift, etc.)
+    #[error("Backend error: {0}")]
+    BackendError(String),
+
     /// LLVM error
     #[error("LLVM error: {0}")]
     LLVMError(String),

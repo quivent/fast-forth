@@ -31,6 +31,7 @@ path = "src/lib.rs"
 # Workspace crates
 fastforth-frontend = { path = "frontend" }
 fastforth-optimizer = { path = "optimizer" }
+backend = { path = "backend", optional = true }
 
 # Core dependencies
 thiserror.workspace = true
@@ -90,11 +91,13 @@ workspace = true
 optional = true
 
 [features]
-default = ["inference"]
+default = ["inference", "cranelift"]
 verbose = ["tracing-subscriber"]
 inference = []
 server = ["inference", "tokio", "axum"]
 http-server = ["tokio"]
+cranelift = ["backend/cranelift"]
+llvm = ["backend/llvm"]
 
 [workspace.package]
 version = "0.1.0"
@@ -111,6 +114,10 @@ rustc-hash = "1.1"
 
 # Analysis and optimization
 cranelift-codegen = "0.102"
+cranelift-frontend = "0.102"
+cranelift-module = "0.102"
+cranelift-jit = "0.102"
+target-lexicon = "0.12"
 inkwell = { version = "0.4", features = ["llvm16-0"] }
 
 # Utilities
