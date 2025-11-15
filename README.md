@@ -980,8 +980,8 @@ fastforth 0.1.0
 ### Core Features
 - ✅ **Full ANS Forth compliance** (core word set + extensions)
 - ✅ **Type safety** (Hindley-Milner type inference)
-- ✅ **LLVM backend** (native code generation)
-- ✅ **5 optimization passes** (40-60% code reduction)
+- ✅ **Dual backends** (Cranelift for fast compilation, LLVM for max performance)
+- ✅ **6 optimization passes** (40-60% code reduction + peephole optimization)
 - ✅ **Stack caching** (70-90% fewer memory operations)
 - ✅ **Foreign Function Interface** (call C libraries)
 
@@ -998,6 +998,34 @@ fastforth 0.1.0
 - ✅ **Debug symbols** (DWARF for gdb/lldb)
 - ✅ **Static and dynamic linking**
 - ✅ **Cross-platform** (LLVM targets: x86, ARM, RISC-V, WebAssembly)
+
+### Build Configuration
+
+Fast Forth supports multiple build profiles optimized for different use cases:
+
+```bash
+# Development build (fast iteration, interpreter only)
+cargo build --features dev-fast
+# Result: 343 MB deps, 0.8s incremental builds, 400-600 KB binary
+
+# Production build (Cranelift JIT, -O2 equivalent)
+cargo build --release --features prod
+# Result: 788 MB deps, 5s incremental builds, 2.6 MB binary
+# Performance: 70-90% of C (Cranelift with speed_and_size optimization)
+
+# Maximum performance (LLVM backend, -O3)
+cargo build --release --features llvm
+# Result: 788 MB deps, 8-15s incremental builds, 2.6 MB binary
+# Performance: 85-110% of C (LLVM with full optimizations)
+```
+
+**Optimization levels**:
+- `-O0` (none): No optimizations, fastest compilation
+- `-O1` (basic): Constant folding, basic peephole
+- `-O2` (standard): Cranelift JIT with speed_and_size + advanced peephole optimization
+- `-O3` (aggressive): LLVM backend with full optimization suite
+
+See [docs/SHARED_LIBRARY_HOTSWAP_DESIGN.md](docs/SHARED_LIBRARY_HOTSWAP_DESIGN.md) for self-updating CLI architecture options.
 
 ## Installation
 
