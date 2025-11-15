@@ -7,6 +7,7 @@ Complete documentation for the Fast Forth compiler and runtime.
 - **[Main README](../README.md)** - Project overview and quick start
 - **[Project Index](PROJECT_INDEX.md)** - Complete documentation index
 - **[Optimization Results](OPTIMIZATION_RESULTS_SUMMARY.md)** - Performance summary
+- **[Bootstrapping Strategy](architecture/BOOTSTRAPPING_STRATEGY.md)** - Self-hosting and dependency reduction
 
 ## Documentation Structure
 
@@ -57,6 +58,7 @@ System architecture and integration.
 - [Backend Deliverables](architecture/BACKEND.md) - LLVM backend
 - [Integration Architecture](architecture/INTEGRATION.md) - System design
 - [Integration Complete](architecture/INTEGRATION_COMPLETE.md) - Status
+- [Bootstrapping Strategy](architecture/BOOTSTRAPPING_STRATEGY.md) - Self-hosting & dependency reduction
 
 ### 🧪 [Testing](testing/)
 Testing guides and references.
