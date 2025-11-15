@@ -97,6 +97,77 @@ pub enum SSAInstruction {
         value: Register,
         ty: StackType,
     },
+
+    // FFI and File I/O Operations
+
+    /// FFI call to external C function
+    FFICall {
+        dest: SmallVec<[Register; 4]>,  // Return values
+        function: String,                // C function name
+        args: SmallVec<[Register; 4]>,  // Arguments
+    },
+
+    /// File open operation (ANS Forth: open-file)
+    /// Stack effect: ( c-addr u fam -- fileid ior )
+    FileOpen {
+        dest_fileid: Register,  // File handle
+        dest_ior: Register,     // I/O result (0 = success)
+        path_addr: Register,    // String address
+        path_len: Register,     // String length
+        mode: Register,         // File access mode (r/o=0, w/o=1, r/w=2)
+    },
+
+    /// File read operation (ANS Forth: read-file)
+    /// Stack effect: ( c-addr u fileid -- u ior )
+    FileRead {
+        dest_bytes: Register,   // Bytes actually read
+        dest_ior: Register,     // I/O result (0 = success)
+        buffer: Register,       // Buffer address
+        count: Register,        // Max bytes to read
+        fileid: Register,       // File handle
+    },
+
+    /// File write operation (ANS Forth: write-file)
+    /// Stack effect: ( c-addr u fileid -- ior )
+    FileWrite {
+        dest_ior: Register,     // I/O result (0 = success)
+        buffer: Register,       // Buffer address
+        count: Register,        // Bytes to write
+        fileid: Register,       // File handle
+    },
+
+    /// File close operation (ANS Forth: close-file)
+    /// Stack effect: ( fileid -- ior )
+    FileClose {
+        dest_ior: Register,     // I/O result (0 = success)
+        fileid: Register,       // File handle
+    },
+
+    /// File delete operation (ANS Forth: delete-file)
+    /// Stack effect: ( c-addr u -- ior )
+    FileDelete {
+        dest_ior: Register,     // I/O result (0 = success)
+        path_addr: Register,    // String address
+        path_len: Register,     // String length
+    },
+
+    /// File create operation (ANS Forth: create-file)
+    /// Stack effect: ( c-addr u fam -- fileid ior )
+    FileCreate {
+        dest_fileid: Register,  // File handle
+        dest_ior: Register,     // I/O result (0 = success)
+        path_addr: Register,    // String address
+        path_len: Register,     // String length
+        mode: Register,         // File access mode
+    },
+
+    /// System call operation (execute shell command)
+    /// Stack effect: ( c-addr u -- return-code )
+    SystemCall {
+        dest: Register,         // Return code (0 = success)
+        command_addr: Register, // Command string address
+        command_len: Register,  // Command string length
+    },
 }
 
 /// Binary operators
@@ -979,11 +1050,15 @@ pub fn convert_to_ssa(program: &Program) -> Result<Vec<SSAFunction>> {
     // If there's top-level code, wrap it in an implicit :main function
     if !program.top_level_code.is_empty() {
         // Create a synthetic Definition for top-level code
+        // Top-level code has no parameters (it's the entry point)
         let main_def = Definition {
             name: "main".to_string(),
             body: program.top_level_code.clone(),
             immediate: false,
-            stack_effect: None,  // Will be inferred
+            stack_effect: Some(StackEffect {
+                inputs: vec![],  // Top-level has no parameters
+                outputs: vec![StackType::Int],  // Returns top of stack
+            }),
             location: SourceLocation::default(),
         };
 
@@ -1065,6 +1140,42 @@ fn format_instruction(inst: &SSAInstruction) -> String {
         }
         SSAInstruction::Load { dest, address, .. } => format!("{} = load {}", dest, address),
         SSAInstruction::Store { address, value, .. } => format!("store {}, {}", value, address),
+
+        // FFI and File I/O formatting
+        SSAInstruction::FFICall { dest, function, args } => {
+            let dest_str = dest
+                .iter()
+                .map(|r| format!("{}", r))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let args_str = args
+                .iter()
+                .map(|r| format!("{}", r))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{} = ffi_call {}({})", dest_str, function, args_str)
+        }
+        SSAInstruction::FileOpen { dest_fileid, dest_ior, path_addr, path_len, mode } => {
+            format!("{}, {} = file_open {}, {}, {}", dest_fileid, dest_ior, path_addr, path_len, mode)
+        }
+        SSAInstruction::FileRead { dest_bytes, dest_ior, buffer, count, fileid } => {
+            format!("{}, {} = file_read {}, {}, {}", dest_bytes, dest_ior, buffer, count, fileid)
+        }
+        SSAInstruction::FileWrite { dest_ior, buffer, count, fileid } => {
+            format!("{} = file_write {}, {}, {}", dest_ior, buffer, count, fileid)
+        }
+        SSAInstruction::FileClose { dest_ior, fileid } => {
+            format!("{} = file_close {}", dest_ior, fileid)
+        }
+        SSAInstruction::FileDelete { dest_ior, path_addr, path_len } => {
+            format!("{} = file_delete {}, {}", dest_ior, path_addr, path_len)
+        }
+        SSAInstruction::FileCreate { dest_fileid, dest_ior, path_addr, path_len, mode } => {
+            format!("{}, {} = file_create {}, {}, {}", dest_fileid, dest_ior, path_addr, path_len, mode)
+        }
+        SSAInstruction::SystemCall { dest, command_addr, command_len } => {
+            format!("{} = system {}, {}", dest, command_addr, command_len)
+        }
     }
 }
 

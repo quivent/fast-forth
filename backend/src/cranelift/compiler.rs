@@ -3,7 +3,7 @@
 //! Fast compilation backend using Cranelift code generator.
 
 use crate::error::{BackendError, Result};
-use crate::cranelift::{CraneliftSettings, SSATranslator};
+use crate::cranelift::{CraneliftSettings, SSATranslator, FFIRegistry};
 use fastforth_frontend::ssa::SSAFunction;
 
 use cranelift_codegen::ir::types;
@@ -28,6 +28,8 @@ pub struct CraneliftBackend {
     functions: HashMap<String, FuncId>,
     /// Cached function references for calls (populated during compilation)
     func_refs: HashMap<String, FuncRef>,
+    /// FFI registry for external C function calls
+    ffi_registry: FFIRegistry,
 }
 
 impl CraneliftBackend {
@@ -76,7 +78,11 @@ impl CraneliftBackend {
 
         // Create JIT module
         let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
-        let module = JITModule::new(builder);
+        let mut module = JITModule::new(builder);
+
+        // Initialize FFI registry and register libc functions
+        let mut ffi_registry = FFIRegistry::new();
+        ffi_registry.register_libc_functions(&mut module)?;
 
         Ok(Self {
             module,
@@ -85,6 +91,7 @@ impl CraneliftBackend {
             settings,
             functions: HashMap::new(),
             func_refs: HashMap::new(),
+            ffi_registry,
         })
     }
 
@@ -126,6 +133,15 @@ impl CraneliftBackend {
             self.func_refs.insert(func_name.clone(), func_ref);
         }
 
+        // Import FFI functions as well
+        let mut ffi_refs = HashMap::new();
+        for ffi_name in self.ffi_registry.function_names() {
+            if let Some(ffi_id) = self.ffi_registry.get_function(ffi_name) {
+                let ffi_ref = self.module.declare_func_in_func(ffi_id, &mut self.ctx.func);
+                ffi_refs.insert(ffi_name.to_string(), ffi_ref);
+            }
+        }
+
         // Clone func_refs to avoid borrow checker issues
         let func_refs_copy = self.func_refs.clone();
 
@@ -134,6 +150,7 @@ impl CraneliftBackend {
             &mut self.ctx.func,
             &mut self.builder_ctx,
             &func_refs_copy,
+            &ffi_refs,
         );
         translator.translate(ssa_func)?;
 

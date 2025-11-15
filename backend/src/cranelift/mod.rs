@@ -9,9 +9,11 @@
 
 mod compiler;
 mod translator;
+mod ffi;
 
 pub use compiler::{CraneliftBackend, CraneliftCompiler};
 pub use translator::SSATranslator;
+pub use ffi::{FFIRegistry, FFISignature};
 
 use crate::error::{BackendError, Result};
 use fastforth_frontend::ssa::{SSAFunction, SSAInstruction, Register, BlockId};

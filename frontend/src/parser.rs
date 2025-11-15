@@ -97,6 +97,10 @@ impl Parser {
                     }
                 }
                 Token::Integer(value) => {
+                    // If we have a pending value, push it first
+                    if let Some(prev_value) = pending_value.take() {
+                        program.top_level_code.push(Word::IntLiteral(prev_value));
+                    }
                     // Save this value in case the next token is CONSTANT
                     pending_value = Some(*value);
                     self.advance();

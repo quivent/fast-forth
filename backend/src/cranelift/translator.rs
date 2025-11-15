@@ -37,6 +37,8 @@ pub struct SSATranslator<'a> {
     current_block: Option<BlockId>,
     /// Map of function names to FuncRefs (pre-imported)
     func_refs: &'a HashMap<String, FuncRef>,
+    /// Map of FFI function names to FuncRefs (pre-imported)
+    ffi_refs: &'a HashMap<String, FuncRef>,
 }
 
 impl<'a> SSATranslator<'a> {
@@ -45,6 +47,7 @@ impl<'a> SSATranslator<'a> {
         func: &'a mut Function,
         builder_ctx: &'a mut FunctionBuilderContext,
         func_refs: &'a HashMap<String, FuncRef>,
+        ffi_refs: &'a HashMap<String, FuncRef>,
     ) -> Self {
         let builder = FunctionBuilder::new(func, builder_ctx);
 
@@ -55,6 +58,7 @@ impl<'a> SSATranslator<'a> {
             phi_nodes: HashMap::new(),
             current_block: None,
             func_refs,
+            ffi_refs,
         }
     }
 
@@ -370,6 +374,56 @@ impl<'a> SSATranslator<'a> {
                 // For now, we'll return an error
                 return Err(BackendError::CodeGeneration(
                     "String literals not yet supported in Cranelift backend".to_string()
+                ));
+            }
+
+            // FFI and File I/O Operations
+            // These are placeholders for now - full implementation in Phase 5.2
+            SSAInstruction::FFICall { dest, function, args } => {
+                return Err(BackendError::CodeGeneration(
+                    format!("FFI call to '{}' not yet implemented", function)
+                ));
+            }
+
+            SSAInstruction::FileOpen { dest_fileid, dest_ior, path_addr, path_len, mode } => {
+                return Err(BackendError::CodeGeneration(
+                    "File open operation not yet implemented".to_string()
+                ));
+            }
+
+            SSAInstruction::FileRead { dest_bytes, dest_ior, buffer, count, fileid } => {
+                return Err(BackendError::CodeGeneration(
+                    "File read operation not yet implemented".to_string()
+                ));
+            }
+
+            SSAInstruction::FileWrite { dest_ior, buffer, count, fileid } => {
+                return Err(BackendError::CodeGeneration(
+                    "File write operation not yet implemented".to_string()
+                ));
+            }
+
+            SSAInstruction::FileClose { dest_ior, fileid } => {
+                return Err(BackendError::CodeGeneration(
+                    "File close operation not yet implemented".to_string()
+                ));
+            }
+
+            SSAInstruction::FileDelete { dest_ior, path_addr, path_len } => {
+                return Err(BackendError::CodeGeneration(
+                    "File delete operation not yet implemented".to_string()
+                ));
+            }
+
+            SSAInstruction::FileCreate { dest_fileid, dest_ior, path_addr, path_len, mode } => {
+                return Err(BackendError::CodeGeneration(
+                    "File create operation not yet implemented".to_string()
+                ));
+            }
+
+            SSAInstruction::SystemCall { dest, command_addr, command_len } => {
+                return Err(BackendError::CodeGeneration(
+                    "System call operation not yet implemented".to_string()
                 ));
             }
         }
