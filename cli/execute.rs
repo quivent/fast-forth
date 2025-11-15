@@ -121,42 +121,35 @@ pub fn execute_program(source: &str, verbose: bool) -> Result<i64> {
 
     // Execute the last function (usually :main if top-level code exists)
     let func_name = &ssa_functions.last().unwrap().name;
-    eprintln!("[DEBUG] Executing function: {}", func_name);
+    let return_count = 1; // All Forth functions return 1 value
+    eprintln!("[DEBUG] Executing function: {} (expects {} return values)", func_name, return_count);
 
     let main_func_ptr = backend.get_function(func_name)
         .ok_or_else(|| anyhow::anyhow!("Failed to get compiled function"))?;
 
     eprintln!("[DEBUG] Calling JIT function at {:?}", main_func_ptr);
 
-    // Create Forth data stack (256 cells = 2KB)
-    const STACK_SIZE: usize = 256;
-    let mut stack = vec![0i64; STACK_SIZE];
-
-    // Stack grows upward: stack_ptr points to next free cell
-    // Start at bottom of stack
-    let stack_base = stack.as_mut_ptr();
-    let stack_ptr = stack_base;
-
-    // Cast to function pointer: fn(*mut i64) -> *mut i64
-    type ForthFn = unsafe extern "C" fn(*mut i64) -> *mut i64;
-    let forth_fn: ForthFn = unsafe { std::mem::transmute(main_func_ptr) };
-
-    // Call the compiled function
-    let result_ptr = unsafe { forth_fn(stack_ptr) };
-
-    // Calculate how many items are on the stack
-    let stack_depth = unsafe {
-        result_ptr.offset_from(stack_base) as usize
+    // Call function based on its return count
+    let result = match return_count {
+        0 => {
+            // Function returns nothing
+            type ForthFn = unsafe extern "C" fn();
+            let forth_fn: ForthFn = unsafe { std::mem::transmute(main_func_ptr) };
+            unsafe { forth_fn() };
+            0
+        }
+        1 => {
+            // Function returns one i64 value
+            type ForthFn = unsafe extern "C" fn() -> i64;
+            let forth_fn: ForthFn = unsafe { std::mem::transmute(main_func_ptr) };
+            unsafe { forth_fn() }
+        }
+        _ => {
+            return Err(anyhow::anyhow!("Functions with multiple return values not yet supported in execute harness"));
+        }
     };
 
-    eprintln!("[DEBUG] Execution complete, stack depth: {}", stack_depth);
-
-    // Read top of stack as result (if any)
-    let result = if stack_depth > 0 {
-        unsafe { *result_ptr.offset(-1) }
-    } else {
-        0
-    };
+    eprintln!("[DEBUG] Execution complete, result: {}", result);
 
     eprintln!("[DEBUG] Top of stack: {}", result);
 

@@ -115,7 +115,7 @@ impl CompilationPipeline {
         let backend_start = Instant::now();
         let result = match mode {
             CompilationMode::AOT => self.compile_aot(&optimized_ir, &mut stats)?,
-            CompilationMode::JIT => self.compile_jit(&optimized_ir, &mut stats)?,
+            CompilationMode::JIT => self.compile_jit(&ssa_functions, &mut stats)?,
         };
         stats.backend_time_ms = backend_start.elapsed().as_millis() as u64;
 
@@ -285,14 +285,55 @@ impl CompilationPipeline {
     }
 
     /// Compile and execute with JIT
-    fn compile_jit(&self, ir: &ForthIR, stats: &mut CompilationStats) -> Result<(Option<usize>, Option<String>, Option<i64>)> {
+    fn compile_jit(&self, ssa_functions: &[SSAFunction], stats: &mut CompilationStats) -> Result<(Option<usize>, Option<String>, Option<i64>)> {
         debug!("Compiling and executing (JIT)...");
 
-        // TODO: Implement JIT execution
-        // For now, return a placeholder
-        warn!("JIT compilation not yet fully implemented");
+        // Use the backend crate's Cranelift compiler
+        use backend::cranelift::{CraneliftBackend, CraneliftSettings};
 
-        Ok((None, None, Some(0)))
+        if ssa_functions.is_empty() {
+            return Ok((None, None, Some(0)));
+        }
+
+        // Create Cranelift backend
+        let settings = CraneliftSettings {
+            opt_level: 1,
+            debug_info: false,
+            target_triple: None,
+        };
+
+        let mut backend = CraneliftBackend::new(settings)
+            .map_err(|e| CompileError::BackendError(format!("{}", e)))?;
+
+        // Prepare (name, function) pairs
+        let functions_with_names: Vec<(String, &SSAFunction)> = ssa_functions
+            .iter()
+            .map(|func| (func.name.clone(), func))
+            .collect();
+
+        // Two-pass compilation
+        backend.declare_all_functions(&functions_with_names)
+            .map_err(|e| CompileError::BackendError(format!("{}", e)))?;
+
+        for (name, func) in &functions_with_names {
+            backend.compile_function(func, name)
+                .map_err(|e| CompileError::BackendError(format!("{}", e)))?;
+        }
+
+        backend.finalize_all()
+            .map_err(|e| CompileError::BackendError(format!("{}", e)))?;
+
+        // Execute the last function (usually :main)
+        let func_name = &ssa_functions.last().unwrap().name;
+        let main_func_ptr = backend.get_function(func_name)
+            .ok_or_else(|| CompileError::BackendError("Failed to get compiled function".to_string()))?;
+
+        // Call function (all Forth functions return i64)
+        type ForthFn = unsafe extern "C" fn() -> i64;
+        let forth_fn: ForthFn = unsafe { std::mem::transmute(main_func_ptr) };
+        let result = unsafe { forth_fn() };
+
+        Ok((None, None, Some(result)))
     }
 
     /// Count total instructions in IR

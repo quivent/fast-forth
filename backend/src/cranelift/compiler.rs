@@ -6,6 +6,8 @@ use crate::error::{BackendError, Result};
 use crate::cranelift::{CraneliftSettings, SSATranslator};
 use fastforth_frontend::ssa::SSAFunction;
 
+use cranelift_codegen::ir::types;
+
 use cranelift_codegen::ir::{AbiParam, Function, FuncRef, Signature};
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings::{self, Configurable, Flags};
@@ -88,8 +90,12 @@ impl CraneliftBackend {
 
     /// Declare all functions upfront (for recursion/inter-function calls)
     pub fn declare_all_functions(&mut self, functions: &[(String, &SSAFunction)]) -> Result<()> {
-        for (name, _) in functions {
-            let sig = self.create_signature();
+        for (name, ssa_func) in functions {
+            // Create signature based on SSA function's parameters and return count
+            let param_count = ssa_func.parameters.len();
+            let return_count = 1; // All Forth functions return 1 value (top of stack)
+            let sig = self.create_signature(param_count, return_count);
+
             let func_id = self.module
                 .declare_function(name, Linkage::Export, &sig)
                 .map_err(|e| BackendError::CodeGeneration(format!("Failed to declare function '{}': {}", name, e)))?;
@@ -106,8 +112,10 @@ impl CraneliftBackend {
             .copied()
             .ok_or_else(|| BackendError::CodeGeneration(format!("Function '{}' not declared", name)))?;
 
-        // Create function signature
-        let sig = self.create_signature();
+        // Create function signature based on SSA function's parameters and return count
+        let param_count = ssa_func.parameters.len();
+        let return_count = 1; // All Forth functions return 1 value
+        let sig = self.create_signature(param_count, return_count);
         self.ctx.func.signature = sig;
 
         // Import all declared functions into this function's context (for calls)
@@ -147,17 +155,21 @@ impl CraneliftBackend {
         Ok(())
     }
 
-    /// Create standard Forth function signature (stack-based)
-    fn create_signature(&self) -> Signature {
+    /// Create standard Forth function signature (register-based SSA calling)
+    /// Functions take their SSA parameters directly and return SSA results
+    fn create_signature(&self, param_count: usize, return_count: usize) -> Signature {
         let mut sig = Signature::new(CallConv::SystemV);
-        // Fast Forth functions take stack pointer as argument
-        sig.params.push(AbiParam::new(
-            self.module.target_config().pointer_type()
-        ));
-        // Return updated stack pointer
-        sig.returns.push(AbiParam::new(
-            self.module.target_config().pointer_type()
-        ));
+
+        // Add parameters (all i64 for now)
+        for _ in 0..param_count {
+            sig.params.push(AbiParam::new(types::I64));
+        }
+
+        // Add returns (all i64 for now)
+        for _ in 0..return_count {
+            sig.returns.push(AbiParam::new(types::I64));
+        }
+
         sig
     }
 
