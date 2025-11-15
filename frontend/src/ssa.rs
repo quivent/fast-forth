@@ -658,28 +658,65 @@ impl SSAConverter {
             false_block: else_block,
         });
 
+        //  Save original stack before branches
+        let original_stack = stack.clone();
+
         // Convert then branch
         self.set_current_block(then_block);
-        let mut then_stack = stack.clone();
+        let mut then_stack = original_stack.clone();
         self.convert_sequence(then_branch, &mut then_stack)?;
+        let then_final = then_stack.clone();
         self.emit(SSAInstruction::Jump {
             target: merge_block,
         });
 
-        // Convert else branch if present
-        if let Some(else_words) = else_branch {
+        // Convert else branch if present, otherwise use original stack
+        let else_final = if let Some(else_words) = else_branch {
             self.set_current_block(else_block);
-            let mut else_stack = stack.clone();
+            let mut else_stack = original_stack.clone();
             self.convert_sequence(else_words, &mut else_stack)?;
+            let result = else_stack.clone();
             self.emit(SSAInstruction::Jump {
                 target: merge_block,
+            });
+            result
+        } else {
+            original_stack.clone()
+        };
+
+        // Verify same stack depth from both branches
+        if then_final.len() != else_final.len() {
+            return Err(ForthError::StackUnderflow {
+                word: "IF".to_string(),
+                expected: then_final.len(),
+                found: else_final.len(),
             });
         }
 
         // Continue from merge block
         self.set_current_block(merge_block);
-        *stack = then_stack; // Use then_stack as representative
 
+        // Generate Phi nodes to merge values from both branches
+        let mut merged_stack = Vec::new();
+        for (i, (&then_reg, &else_reg)) in then_final.iter().zip(else_final.iter()).enumerate() {
+            if then_reg == else_reg {
+                // Same register from both branches - no merge needed
+                merged_stack.push(then_reg);
+            } else {
+                // Different registers - need Phi to merge
+                let phi_reg = self.fresh_register();
+                self.emit(SSAInstruction::Phi {
+                    dest: phi_reg,
+                    incoming: vec![
+                        (then_block, then_reg),
+                        (else_block, else_reg),
+                    ],
+                });
+                merged_stack.push(phi_reg);
+            }
+        }
+
+        *stack = merged_stack;
         Ok(())
     }
 

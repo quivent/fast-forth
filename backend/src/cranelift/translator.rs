@@ -15,15 +15,26 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 
 use std::collections::HashMap;
 
+/// Information about Phi nodes for a block
+#[derive(Debug, Clone)]
+struct PhiInfo {
+    /// Register that receives the merged value
+    dest: Register,
+    /// Incoming values: (predecessor_block, source_register)
+    incoming: Vec<(BlockId, Register)>,
+}
+
 /// Translator from Fast Forth SSA to Cranelift IR
 pub struct SSATranslator<'a> {
     builder: FunctionBuilder<'a>,
-    /// Map Fast Forth registers to Cranelift variables
-    register_map: HashMap<Register, Variable>,
+    /// Map Fast Forth registers to Cranelift values (changed from Variables)
+    register_values: HashMap<Register, Value>,
     /// Map Fast Forth blocks to Cranelift blocks
     block_map: HashMap<BlockId, Block>,
-    /// Next variable ID
-    next_var: u32,
+    /// Map of blocks to their Phi nodes
+    phi_nodes: HashMap<BlockId, Vec<PhiInfo>>,
+    /// Current block being translated
+    current_block: Option<BlockId>,
     /// Map of function names to FuncRefs (pre-imported)
     func_refs: &'a HashMap<String, FuncRef>,
 }
@@ -39,15 +50,36 @@ impl<'a> SSATranslator<'a> {
 
         Self {
             builder,
-            register_map: HashMap::new(),
+            register_values: HashMap::new(),
             block_map: HashMap::new(),
-            next_var: 0,
+            phi_nodes: HashMap::new(),
+            current_block: None,
             func_refs,
+        }
+    }
+
+    /// Analyze Phi nodes in the SSA function
+    fn analyze_phi_nodes(&mut self, ssa_func: &SSAFunction) {
+        for block in &ssa_func.blocks {
+            for inst in &block.instructions {
+                if let SSAInstruction::Phi { dest, incoming } = inst {
+                    let phi_info = PhiInfo {
+                        dest: *dest,
+                        incoming: incoming.clone(),
+                    };
+                    self.phi_nodes.entry(block.id)
+                        .or_insert_with(Vec::new)
+                        .push(phi_info);
+                }
+            }
         }
     }
 
     /// Translate entire SSA function to Cranelift IR
     pub fn translate(mut self, ssa_func: &SSAFunction) -> Result<()> {
+        // First pass: analyze Phi nodes to determine block parameters
+        self.analyze_phi_nodes(ssa_func);
+
         // Create Cranelift blocks for all SSA blocks
         for block in &ssa_func.blocks {
             let cl_block = self.builder.create_block();
@@ -56,6 +88,11 @@ impl<'a> SSATranslator<'a> {
             // First block is entry block - add parameters
             if block.id == ssa_func.entry_block {
                 self.builder.append_block_params_for_function_params(cl_block);
+            } else if let Some(phi_infos) = self.phi_nodes.get(&block.id) {
+                // Add block parameters for Phi nodes
+                for _ in phi_infos {
+                    self.builder.append_block_param(cl_block, types::I64);
+                }
             }
         }
 
@@ -65,11 +102,8 @@ impl<'a> SSATranslator<'a> {
 
         // Map function parameters to registers
         for (i, &param_reg) in ssa_func.parameters.iter().enumerate() {
-            let var = self.fresh_variable();
-            self.register_map.insert(param_reg, var);
             let value = self.builder.block_params(entry_block)[i];
-            self.builder.declare_var(var, types::I64);
-            self.builder.def_var(var, value);
+            self.register_values.insert(param_reg, value);
         }
 
         // Translate each block
@@ -93,6 +127,19 @@ impl<'a> SSATranslator<'a> {
         let cl_block = self.block_map[&block.id];
         self.builder.switch_to_block(cl_block);
 
+        // Set current block for branch/jump target resolution
+        self.current_block = Some(block.id);
+
+        // Handle block parameters for Phi nodes
+        if let Some(phi_infos) = self.phi_nodes.get(&block.id).cloned() {
+            let block_params = self.builder.block_params(cl_block).to_vec();
+            for (i, phi_info) in phi_infos.iter().enumerate() {
+                if i < block_params.len() {
+                    self.register_values.insert(phi_info.dest, block_params[i]);
+                }
+            }
+        }
+
         for inst in &block.instructions {
             self.translate_instruction(inst)?;
         }
@@ -104,21 +151,18 @@ impl<'a> SSATranslator<'a> {
     fn translate_instruction(&mut self, inst: &SSAInstruction) -> Result<()> {
         match inst {
             SSAInstruction::LoadInt { dest, value } => {
-                let var = self.get_or_create_var(*dest);
                 let val = self.builder.ins().iconst(types::I64, *value);
-                self.builder.def_var(var, val);
+                self.register_values.insert(*dest, val);
             }
 
             SSAInstruction::LoadFloat { dest, value } => {
-                let var = self.get_or_create_var(*dest);
                 let val = self.builder.ins().f64const(*value);
-                self.builder.def_var(var, val);
+                self.register_values.insert(*dest, val);
             }
 
             SSAInstruction::BinaryOp { dest, op, left, right } => {
-                let var = self.get_or_create_var(*dest);
-                let left_val = self.get_register(*left);
-                let right_val = self.get_register(*right);
+                let left_val = self.get_register(*left)?;
+                let right_val = self.get_register(*right)?;
 
                 let result = match op {
                     BinaryOperator::Add => self.builder.ins().iadd(left_val, right_val),
@@ -178,12 +222,11 @@ impl<'a> SSATranslator<'a> {
                     BinaryOperator::Or => self.builder.ins().bor(left_val, right_val),
                 };
 
-                self.builder.def_var(var, result);
+                self.register_values.insert(*dest, result);
             }
 
             SSAInstruction::UnaryOp { dest, op, operand } => {
-                let var = self.get_or_create_var(*dest);
-                let operand_val = self.get_register(*operand);
+                let operand_val = self.get_register(*operand)?;
 
                 let result = match op {
                     UnaryOperator::Negate => {
@@ -207,12 +250,11 @@ impl<'a> SSATranslator<'a> {
                     }
                 };
 
-                self.builder.def_var(var, result);
+                self.register_values.insert(*dest, result);
             }
 
             SSAInstruction::Load { dest, address, ty } => {
-                let var = self.get_or_create_var(*dest);
-                let addr_val = self.get_register(*address);
+                let addr_val = self.get_register(*address)?;
 
                 use cranelift_codegen::ir::MemFlags;
 
@@ -232,20 +274,20 @@ impl<'a> SSATranslator<'a> {
                     }
                 };
 
-                self.builder.def_var(var, result);
+                self.register_values.insert(*dest, result);
             }
 
             SSAInstruction::Store { address, value, ty } => {
                 use cranelift_codegen::ir::MemFlags;
 
-                let addr_val = self.get_register(*address);
-                let val = self.get_register(*value);
+                let addr_val = self.get_register(*address)?;
+                let val = self.get_register(*value)?;
 
                 self.builder.ins().store(MemFlags::new(), val, addr_val, 0);
             }
 
             SSAInstruction::Branch { condition, true_block, false_block } => {
-                let cond_val = self.get_register(*condition);
+                let cond_val = self.get_register(*condition)?;
                 let true_cl_block = self.block_map[true_block];
                 let false_cl_block = self.block_map[false_block];
 
@@ -257,19 +299,30 @@ impl<'a> SSATranslator<'a> {
                     zero,
                 );
 
+                // Branch instruction doesn't pass arguments - the then/else blocks
+                // will jump to the merge block with the appropriate arguments
                 self.builder.ins().brif(cond_bool, true_cl_block, &[], false_cl_block, &[]);
             }
 
             SSAInstruction::Jump { target } => {
                 let cl_block = self.block_map[target];
-                self.builder.ins().jump(cl_block, &[]);
+
+                // Get current block for argument resolution
+                let from_block = self.current_block.ok_or_else(|| BackendError::CodeGeneration(
+                    "Jump instruction outside of block context".to_string()
+                ))?;
+
+                // Collect arguments based on target block's Phi nodes
+                let args = self.collect_branch_args(*target, &from_block)?;
+
+                self.builder.ins().jump(cl_block, &args);
             }
 
             SSAInstruction::Return { values } => {
                 let return_vals: Vec<Value> = values
                     .iter()
                     .map(|&reg| self.get_register(reg))
-                    .collect();
+                    .collect::<Result<Vec<_>>>()?;
 
                 self.builder.ins().return_(&return_vals);
             }
@@ -286,7 +339,7 @@ impl<'a> SSATranslator<'a> {
                 let arg_values: Vec<Value> = args
                     .iter()
                     .map(|&reg| self.get_register(reg))
-                    .collect();
+                    .collect::<Result<Vec<_>>>()?;
 
                 // Emit the call instruction
                 let call = self.builder.ins().call(func_ref, &arg_values);
@@ -297,8 +350,7 @@ impl<'a> SSATranslator<'a> {
                 // Map return values to destination registers
                 for (i, &dest_reg) in dest.iter().enumerate() {
                     if i < results.len() {
-                        let var = self.get_or_create_var(dest_reg);
-                        self.builder.def_var(var, results[i]);
+                        self.register_values.insert(dest_reg, results[i]);
                     } else {
                         return Err(BackendError::CodeGeneration(
                             format!("Function '{}' returned fewer values than expected", name)
@@ -307,18 +359,10 @@ impl<'a> SSATranslator<'a> {
                 }
             }
 
-            SSAInstruction::Phi { dest, incoming: _ } => {
-                // Cranelift handles phi nodes automatically through its Variable system!
-                //
-                // When using Variables with use_var/def_var, Cranelift's SSA construction
-                // automatically inserts phi nodes where needed. We don't need to do anything
-                // special here - just ensure the destination variable is declared.
-                //
-                // The frontend generates explicit Phi nodes, but these are informational.
-                // Cranelift will figure out the actual phi nodes by looking at where variables
-                // are defined and used across block boundaries.
-                let _dest_var = self.get_or_create_var(*dest);
-                // That's it! Cranelift handles the rest automatically during SSA finalization.
+            SSAInstruction::Phi { dest, incoming } => {
+                // Phi nodes are now handled via block parameters.
+                // The destination register was already set when we entered the block.
+                // Just skip this instruction - nothing to do here.
             }
 
             SSAInstruction::LoadString { dest, value } => {
@@ -333,29 +377,37 @@ impl<'a> SSATranslator<'a> {
         Ok(())
     }
 
-    /// Get or create a Cranelift variable for a Fast Forth register
-    fn get_or_create_var(&mut self, reg: Register) -> Variable {
-        if let Some(&var) = self.register_map.get(&reg) {
-            var
-        } else {
-            let var = self.fresh_variable();
-            self.builder.declare_var(var, types::I64);
-            self.register_map.insert(reg, var);
-            var
-        }
-    }
-
     /// Get the Cranelift value for a Fast Forth register
-    fn get_register(&mut self, reg: Register) -> Value {
-        let var = self.register_map[&reg];
-        self.builder.use_var(var)
+    fn get_register(&self, reg: Register) -> Result<Value> {
+        self.register_values.get(&reg)
+            .copied()
+            .ok_or_else(|| BackendError::CodeGeneration(
+                format!("Register {:?} not defined", reg)
+            ))
     }
 
-    /// Create a fresh Cranelift variable
-    fn fresh_variable(&mut self) -> Variable {
-        let var = Variable::from_u32(self.next_var);
-        self.next_var += 1;
-        var
+    /// Collect arguments for a branch based on target block's Phi nodes
+    fn collect_branch_args(&self, target_block: BlockId, from_block: &BlockId) -> Result<Vec<Value>> {
+        if let Some(phi_infos) = self.phi_nodes.get(&target_block) {
+            let mut args = Vec::new();
+            for phi_info in phi_infos.iter() {
+                // Find the incoming value from our current block
+                let incoming_reg = phi_info.incoming.iter()
+                    .find(|(block_id, _)| block_id == from_block)
+                    .map(|(_, reg)| reg)
+                    .ok_or_else(|| BackendError::CodeGeneration(
+                        format!("Phi node in block {:?} missing incoming value from block {:?}",
+                                target_block, from_block)
+                    ))?;
+
+                let value = self.get_register(*incoming_reg)?;
+                args.push(value);
+            }
+            Ok(args)
+        } else {
+            // No Phi nodes, no arguments needed
+            Ok(Vec::new())
+        }
     }
 }
 
