@@ -39,6 +39,9 @@ pub struct SSATranslator<'a> {
     func_refs: &'a HashMap<String, FuncRef>,
     /// Map of FFI function names to FuncRefs (pre-imported)
     ffi_refs: &'a HashMap<String, FuncRef>,
+    /// Actual control flow graph: tracks which blocks jump to which blocks
+    /// This is built during translation and may differ from SSA Phi predecessors
+    block_predecessors: HashMap<BlockId, Vec<BlockId>>,
 }
 
 impl<'a> SSATranslator<'a> {
@@ -59,6 +62,7 @@ impl<'a> SSATranslator<'a> {
             current_block: None,
             func_refs,
             ffi_refs,
+            block_predecessors: HashMap::new(),
         }
     }
 
@@ -295,6 +299,13 @@ impl<'a> SSATranslator<'a> {
                 let true_cl_block = self.block_map[true_block];
                 let false_cl_block = self.block_map[false_block];
 
+                // Track control flow edges
+                let from_block = self.current_block.ok_or_else(|| BackendError::CodeGeneration(
+                    "Branch instruction outside of block context".to_string()
+                ))?;
+                self.block_predecessors.entry(*true_block).or_insert_with(Vec::new).push(from_block);
+                self.block_predecessors.entry(*false_block).or_insert_with(Vec::new).push(from_block);
+
                 // Convert i64 to i1 for branch condition
                 let zero = self.builder.ins().iconst(types::I64, 0);
                 let cond_bool = self.builder.ins().icmp(
@@ -315,6 +326,9 @@ impl<'a> SSATranslator<'a> {
                 let from_block = self.current_block.ok_or_else(|| BackendError::CodeGeneration(
                     "Jump instruction outside of block context".to_string()
                 ))?;
+
+                // Track control flow edge
+                self.block_predecessors.entry(*target).or_insert_with(Vec::new).push(from_block);
 
                 // Collect arguments based on target block's Phi nodes
                 let args = self.collect_branch_args(*target, &from_block)?;
@@ -679,17 +693,54 @@ impl<'a> SSATranslator<'a> {
         if let Some(phi_infos) = self.phi_nodes.get(&target_block) {
             let mut args = Vec::new();
             for phi_info in phi_infos.iter() {
-                // Find the incoming value from our current block
-                let incoming_reg = phi_info.incoming.iter()
+                // Try to find the incoming value from our current block directly
+                if let Some((_, reg)) = phi_info.incoming.iter()
                     .find(|(block_id, _)| block_id == from_block)
-                    .map(|(_, reg)| reg)
-                    .ok_or_else(|| BackendError::CodeGeneration(
-                        format!("Phi node in block {:?} missing incoming value from block {:?}",
-                                target_block, from_block)
-                    ))?;
+                {
+                    let value = self.get_register(*reg)?;
+                    args.push(value);
+                } else {
+                    // from_block is not a direct predecessor in the Phi node.
+                    // This happens with nested if-then-else where an inner merge block
+                    // jumps to an outer merge block.
+                    //
+                    // The SSA generation creates Phi nodes based on abstract control flow
+                    // (e.g., "value from outer then" vs "value from outer else"), but the
+                    // actual execution creates intermediate merge blocks (inner merge) that
+                    // jump to the outer merge.
+                    //
+                    // Solution: Use the Phi destination from from_block. This represents
+                    // the merged value that should be passed forward.
 
-                let value = self.get_register(*incoming_reg)?;
-                args.push(value);
+                    if let Some(from_phi_infos) = self.phi_nodes.get(from_block) {
+                        // Use the first Phi's destination
+                        // In the common case of nested if-then-else, there's typically one
+                        // Phi per value being merged
+                        if let Some(from_phi) = from_phi_infos.first() {
+                            let value = self.get_register(from_phi.dest)?;
+                            args.push(value);
+                        } else {
+                            return Err(BackendError::CodeGeneration(
+                                format!(
+                                    "Phi node in block {:?} missing incoming value from block {:?}. \
+                                     Block {:?} has no Phi nodes.",
+                                    target_block, from_block, from_block
+                                )
+                            ));
+                        }
+                    } else {
+                        // from_block has no Phi nodes - this is an error
+                        return Err(BackendError::CodeGeneration(
+                            format!(
+                                "Phi node in block {:?} missing incoming value from block {:?}. \
+                                 Block {:?} is not a direct predecessor and has no Phi nodes to resolve the value. \
+                                 Expected predecessors: {:?}",
+                                target_block, from_block, from_block,
+                                phi_info.incoming.iter().map(|(b, _)| b).collect::<Vec<_>>()
+                            )
+                        ));
+                    }
+                }
             }
             Ok(args)
         } else {
