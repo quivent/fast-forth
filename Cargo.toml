@@ -91,13 +91,16 @@ workspace = true
 optional = true
 
 [features]
-default = ["inference", "cranelift"]
+default = ["inference"]
 verbose = ["tracing-subscriber"]
 inference = []
 server = ["inference", "tokio", "axum"]
 http-server = ["tokio"]
 cranelift = ["backend/cranelift"]
 llvm = ["backend/llvm"]
+interpreter = []  # Pure Rust interpreter (no JIT compilation)
+dev-fast = ["inference", "interpreter"]  # Fast development builds
+prod = ["inference", "cranelift"]  # Production builds with JIT
 
 [workspace.package]
 version = "0.1.0"
