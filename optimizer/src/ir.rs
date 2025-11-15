@@ -124,6 +124,15 @@ pub enum Instruction {
     CachedOver { depth: u8 },     // Over with known stack depth
     FlushCache,                    // Force stack cache to memory
 
+    // Concurrency primitives (NEW)
+    Spawn,         // ( xt -- thread-id ) Create OS thread
+    Join,          // ( thread-id -- ) Wait for thread completion
+    Channel(i64),  // ( size -- chan ) Create message queue (or literal size variant)
+    Send,          // ( value chan -- ) Send to channel (blocking)
+    Recv,          // ( chan -- value ) Receive from channel (blocking)
+    CloseChannel,  // ( chan -- ) Close channel
+    DestroyChannel, // ( chan -- ) Destroy channel
+
     // Metadata
     Comment(String),
     Label(String),
@@ -176,6 +185,15 @@ impl Instruction {
             Return | Branch(_) | BranchIf(_) | BranchIfNot(_) => StackEffect::new(0, 0),
             Call(_) => StackEffect::new(0, 0), // Depends on called word
 
+            // Concurrency primitives
+            Spawn => StackEffect::new(1, 1),          // ( xt -- thread-id )
+            Join => StackEffect::new(1, 0),           // ( thread-id -- )
+            Channel(_) => StackEffect::new(0, 1),     // ( -- chan ) size is literal
+            Send => StackEffect::new(2, 0),           // ( value chan -- )
+            Recv => StackEffect::new(1, 1),           // ( chan -- value )
+            CloseChannel => StackEffect::new(1, 0),   // ( chan -- )
+            DestroyChannel => StackEffect::new(1, 0), // ( chan -- )
+
             Comment(_) | Label(_) | Nop => StackEffect::new(0, 0),
         }
     }
@@ -186,7 +204,9 @@ impl Instruction {
         !matches!(
             self,
             Store | Store8 | ToR | Call(_) | Return | Branch(_) |
-            BranchIf(_) | BranchIfNot(_) | FlushCache
+            BranchIf(_) | BranchIfNot(_) | FlushCache |
+            // Concurrency primitives are NOT pure (side effects)
+            Spawn | Join | Channel(_) | Send | Recv | CloseChannel | DestroyChannel
         )
     }
 

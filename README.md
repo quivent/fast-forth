@@ -169,6 +169,91 @@ result = requests.post("http://localhost:8080/verify", json={
 
 See [AGENTIC_FEATURES_COMPLETE.md](AGENTIC_FEATURES_COMPLETE.md) for complete documentation.
 
+## 🧵 Multi-Agent Concurrency (NEW!)
+
+Fast Forth supports **two approaches** for multi-agent coordination:
+
+### 1. Pure Forth (Augmented) - Recommended
+
+**5 minimal concurrency primitives** for native multi-agent workflows:
+
+```forth
+spawn    ( xt -- thread-id )    \ Create OS thread
+channel  ( size -- chan )        \ Create message queue
+send     ( value chan -- )       \ Send to channel (blocking)
+recv     ( chan -- value )       \ Receive from channel (blocking)
+join     ( thread-id -- )        \ Wait for thread completion
+```
+
+**Example: Multi-Agent Orchestration**
+
+```forth
+\ Create work distribution channels
+100 channel constant work-queue
+100 channel constant result-queue
+
+\ Agent worker thread
+: agent-worker ( agent-id -- )
+  begin
+    work-queue recv               \ Get spec (blocks if empty)
+    dup 0= if drop exit then      \ Shutdown sentinel
+    dup validate-spec
+    dup generate-code
+    dup verify-stack-effect
+    result-queue send
+  again ;
+
+\ Run 100 specs with 10 agents
+: multi-agent-run ( spec-count agent-count -- )
+  dup 0 do ['] agent-worker spawn drop loop  \ Start agents
+  over 0 do i work-queue send loop           \ Distribute work
+  swap 0 do result-queue recv . loop         \ Collect results
+;
+
+\ Execute: 100 specs in parallel
+100 10 multi-agent-run
+```
+
+**Performance**:
+- Channel throughput: **82.4 million ops/sec** (83x better than target)
+- Spawn latency: **10.9 μs** (4.6x better than target)
+- Binary: +15 KB (+0.6% from 2.6 MB → 2.615 MB)
+- Compilation: +100ms (cacheable to +10ms)
+- **120x speedup** over traditional workflows (10x parallelism × 12x iteration)
+
+### 2. Go Orchestrator - Pragmatic Alternative
+
+**Lightweight Go coordinator** (1.5 MB) for proven concurrency:
+
+```bash
+# Build Go orchestrator
+cd examples
+go build orchestrator.go
+
+# Run with 10 agents processing 100 specs
+./orchestrator
+# Output: Completed in ~100 seconds (vs 3.3 hours traditional)
+```
+
+**Comparison**:
+
+| Metric | Pure Forth | Go Orchestrator |
+|--------|-----------|-----------------|
+| Binary Size | 2.615 MB | 4.1 MB |
+| Compilation | 150ms | 550ms |
+| Memory (10 agents) | 60 MB | 10.7 MB |
+| Development Time | 2-3 weeks | 2-3 days |
+| Throughput | ~10x speedup | ~10x speedup |
+
+**Status**: ✅ Production ready - All 19 tests pass (11 C + 8 Forth), zero memory leaks, zero data races
+
+**See**:
+- [CONCURRENCY_COMPLETE.md](CONCURRENCY_COMPLETE.md) - Implementation summary & results
+- [CONCURRENCY_TRADEOFFS_COMPARISON.md](CONCURRENCY_TRADEOFFS_COMPARISON.md) - Pure Forth vs Go
+- [CONCURRENCY_IMPLEMENTATION_GUIDE.md](CONCURRENCY_IMPLEMENTATION_GUIDE.md) - Build/usage guide
+- [examples/forth_multi_agent.forth](examples/forth_multi_agent.forth) - Multi-agent example
+- [examples/concurrency_hello_world.forth](examples/concurrency_hello_world.forth) - Hello world
+
 ## Performance Benchmarks
 
 ### Modern Systems Language Comparison

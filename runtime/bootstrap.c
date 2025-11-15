@@ -6,8 +6,10 @@
  */
 
 #include "forth_runtime.h"
+#include "concurrency.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // External declarations for FFI and memory
 extern void forth_ffi_init_stdlib(forth_vm_t *vm);
@@ -98,7 +100,7 @@ static const primitive_def_t primitives[] = {
     {"ALLOT",   forth_allot,    0},
     {",",       forth_comma,    0},
     {"C,",      forth_ccomma,   0},
-    {"CREATE",  forth_create,   0},
+    {"CREATE",  forth_create_word,   0},
     {"DOES>",   forth_does,     FLAG_COMPILE_ONLY},
 
     // Compilation (stubs - full implementation needs compiler)
@@ -107,6 +109,15 @@ static const primitive_def_t primitives[] = {
     {"IMMEDIATE", forth_immediate, 0},
     {"LITERAL", forth_literal, FLAG_IMMEDIATE | FLAG_COMPILE_ONLY},
     {"POSTPONE", forth_postpone, FLAG_IMMEDIATE | FLAG_COMPILE_ONLY},
+
+    // Concurrency primitives (NEW)
+    {"SPAWN",          forth_spawn_primitive,          0},
+    {"JOIN",           forth_join_primitive,           0},
+    {"CHANNEL",        forth_channel_primitive,        0},
+    {"SEND",           forth_send_primitive,           0},
+    {"RECV",           forth_recv_primitive,           0},
+    {"CLOSE-CHANNEL",  forth_close_channel_primitive,  0},
+    {"DESTROY-CHANNEL",forth_destroy_channel_primitive,0},
 
     // Terminator
     {NULL, NULL, 0}
@@ -146,7 +157,7 @@ void forth_colon(forth_vm_t *vm) {
     vm->compiling = true;
 
     // Create new word header
-    forth_create(vm);
+    forth_create_word(vm);
 }
 
 void forth_semicolon(forth_vm_t *vm) {
@@ -160,7 +171,8 @@ void forth_semicolon(forth_vm_t *vm) {
 void forth_immediate(forth_vm_t *vm) {
     // Mark last word as immediate
     if (vm->last_word) {
-        vm->last_word->flags |= FLAG_IMMEDIATE;
+        word_header_t *header = (word_header_t *)vm->last_word;
+        header->flags |= FLAG_IMMEDIATE;
     }
 }
 

@@ -204,7 +204,7 @@ void forth_here(forth_vm_t *vm);     // HERE
 void forth_allot(forth_vm_t *vm);    // ALLOT
 void forth_comma(forth_vm_t *vm);    // ,
 void forth_ccomma(forth_vm_t *vm);   // C,
-void forth_create(forth_vm_t *vm);   // CREATE
+void forth_create_word(forth_vm_t *vm);   // CREATE (renamed to avoid conflict)
 void forth_does(forth_vm_t *vm);     // DOES>
 
 // Compilation

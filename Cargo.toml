@@ -74,6 +74,9 @@ rustc-hash = "1.1"
 criterion.workspace = true
 proptest.workspace = true
 
+[build-dependencies]
+cc = "1.0"
+
 [[bench]]
 name = "inference_bench"
 harness = false

@@ -102,7 +102,7 @@ void *forth_dict_alloc(forth_vm_t *vm, size_t size) {
 // WORD CREATION WITH OPTIMIZED LAYOUT
 // ============================================================================
 
-void forth_create(forth_vm_t *vm) {
+void forth_create_word(forth_vm_t *vm) {
     // Parse word name
     char name[256];
     int len = 0;
