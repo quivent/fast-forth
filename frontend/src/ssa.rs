@@ -990,10 +990,15 @@ impl SSAConverter {
 
         // Verify same stack depth from both branches
         if then_final.len() != else_final.len() {
-            return Err(ForthError::StackUnderflow {
-                word: "IF".to_string(),
-                expected: then_final.len(),
-                found: else_final.len(),
+            return Err(ForthError::StackMismatch {
+                word: "IF-THEN-ELSE".to_string(),
+                then_depth: then_final.len(),
+                else_depth: else_final.len(),
+                message: format!(
+                    "THEN branch leaves {} items, ELSE branch leaves {} items",
+                    then_final.len(),
+                    else_final.len()
+                ),
             });
         }
 

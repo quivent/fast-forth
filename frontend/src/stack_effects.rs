@@ -260,18 +260,26 @@ impl StackEffectInference {
                 // IF consumes a boolean, branches should have same effect
                 let then_effect = self.infer_sequence(then_branch)?;
 
-                let _else_effect = if let Some(else_words) = else_branch {
+                let else_effect = if let Some(else_words) = else_branch {
                     self.infer_sequence(else_words)?
                 } else {
                     StackEffect::new(vec![], vec![])
                 };
 
                 // Both branches should produce same net effect
-                // For now, use the then branch effect
-                let mut inputs = vec![StackType::Bool];
-                inputs.extend(then_effect.inputs);
+                // Take the maximum inputs needed by either branch
+                let max_inputs = then_effect.inputs.len().max(else_effect.inputs.len());
+                let inputs_vec: Vec<StackType> = (0..max_inputs).map(|_| StackType::Unknown).collect();
 
-                Ok(StackEffect::new(inputs, then_effect.outputs))
+                // Both branches should produce the same number of outputs
+                let output_count = then_effect.outputs.len();
+                let outputs_vec: Vec<StackType> = (0..output_count).map(|_| StackType::Unknown).collect();
+
+                // Add the boolean consumed by IF
+                let mut inputs = vec![StackType::Bool];
+                inputs.extend(inputs_vec);
+
+                Ok(StackEffect::new(inputs, outputs_vec))
             }
             Word::BeginUntil { body } => {
                 // BEGIN...UNTIL loops consume a boolean at the end

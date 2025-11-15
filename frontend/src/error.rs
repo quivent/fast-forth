@@ -32,6 +32,14 @@ pub enum ForthError {
         found: usize,
     },
 
+    #[error("Stack depth mismatch in {word}: {message}")]
+    StackMismatch {
+        word: String,
+        then_depth: usize,
+        else_depth: usize,
+        message: String,
+    },
+
     #[error("Stack overflow: maximum depth {max} exceeded")]
     StackOverflow {
         max: usize,
