@@ -48,6 +48,7 @@ fn main() {
             "--exclude=target",
             "--exclude=.git",
             "--exclude=build",
+            "--exclude=release",  // CRITICAL: Prevent binary-in-binary recursion
             "--exclude=*.o",
             "--exclude=*.a",
             "--exclude=*.so",

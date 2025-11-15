@@ -13,21 +13,39 @@ jobs:
     strategy:
       matrix:
         include:
+          # macOS builds
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: fastforth-aarch64-apple-darwin
+            platform: macos-arm64
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact: fastforth-x86_64-apple-darwin
+            platform: macos-x86_64
+
+          # Linux builds (Ubuntu/Debian compatible)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: fastforth-x86_64-unknown-linux-gnu
+            platform: linux-x86_64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact: fastforth-aarch64-unknown-linux-gnu
+            platform: linux-arm64
+          - os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+            artifact: fastforth-i686-unknown-linux-gnu
+            platform: linux-i686
+
+          # Windows builds
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: fastforth-x86_64-pc-windows-msvc.exe
+            platform: windows-x86_64
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+            artifact: fastforth-i686-pc-windows-msvc.exe
+            platform: windows-i686
 
     steps:
       - name: Checkout code
@@ -40,11 +58,20 @@ jobs:
           target: ${{ matrix.target }}
           override: true
 
-      - name: Install cross-compilation tools (Linux ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
+      - name: Install cross-compilation tools (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+          # ARM64 cross-compiler
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
+          # i686 (32-bit) libraries
+          if [ "${{ matrix.target }}" = "i686-unknown-linux-gnu" ]; then
+            sudo apt-get install -y gcc-multilib
+          fi
 
       - name: Build release binary
         run: |
