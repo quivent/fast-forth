@@ -5,6 +5,9 @@ members = [
     "optimizer",
     "benchmarks/performance_validation",
 ]
+exclude = [
+    "tests/fuzz",
+]
 resolver = "2"
 
 [package]
@@ -74,6 +77,7 @@ rustc-hash = "1.1"
 [dev-dependencies]
 criterion.workspace = true
 proptest.workspace = true
+tempfile = "3.8"
 
 [build-dependencies]
 cc = "1.0"
@@ -85,6 +89,18 @@ harness = false
 [[bench]]
 name = "phase2_optimization_bench"
 harness = false
+
+[[test]]
+name = "deep_nesting"
+path = "tests/stress/deep_nesting.rs"
+
+[[test]]
+name = "error_scenarios"
+path = "tests/integration/error_scenarios.rs"
+
+[[test]]
+name = "error_handlers"
+path = "tests/errors/mod.rs"
 
 [dependencies.tracing-subscriber]
 workspace = true
@@ -101,6 +117,7 @@ llvm = ["backend/llvm"]
 interpreter = []  # Pure Rust interpreter (no JIT compilation)
 dev-fast = ["inference", "interpreter"]  # Fast development builds
 prod = ["inference", "cranelift"]  # Production builds with JIT
+destructive_tests = []  # Enable destructive testing (OOM, disk full, stack overflow)
 
 [workspace.package]
 version = "0.1.0"

@@ -5,10 +5,59 @@ on:
     # Run fuzzing every day at 2 AM UTC
     - cron: '0 2 * * *'
   workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
+  proptest:
+    name: Property-Based Testing
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Install GForth (differential oracle)
+      run: sudo apt-get update && sudo apt-get install -y gforth
+
+    - name: Cache cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-proptest-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run property-based tests
+      run: |
+        cd tests/fuzz
+        cargo test --lib -- --test-threads=1
+      env:
+        PROPTEST_CASES: 1000
+
+    - name: Run corpus tests
+      run: |
+        cd tests/fuzz
+        cargo test corpus_tests --lib
+
+    - name: Upload test results
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: proptest-failures
+        path: tests/fuzz/proptest-regressions/
+
   fuzz:
-    name: Fuzz Testing
+    name: LibFuzzer Testing
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +72,15 @@ jobs:
 
     - name: Install cargo-fuzz
       run: cargo install cargo-fuzz
+
+    - name: Cache cargo dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Run fuzzer (5 minutes)
       run: |

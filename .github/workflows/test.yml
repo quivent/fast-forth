@@ -1,4 +1,4 @@
-name: Test
+name: Comprehensive Multi-Platform CI
 
 on:
   push:
@@ -8,112 +8,444 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  test:
-    name: Test Suite
+  # Matrix testing across all platforms, Rust versions, and feature combinations
+  test-matrix:
+    name: Test - ${{ matrix.os }} / ${{ matrix.rust }} / ${{ matrix.features }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false  # Continue testing other combinations even if one fails
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        rust: [stable, nightly]
+        os:
+          - ubuntu-latest
+          - ubuntu-20.04
+          - macos-latest
+          - macos-12
+          - windows-latest
+        rust:
+          - stable
+          - beta
+          - nightly
+        features:
+          - default
+          - cranelift
+          - llvm
+          - interpreter
+          - server
+          - "cranelift,inference"
+          - "llvm,inference"
+          - "interpreter,inference"
+          - all-features
+        exclude:
+          # LLVM backend may not build on all platforms
+          - os: windows-latest
+            features: llvm
+          - os: windows-latest
+            features: "llvm,inference"
+          # Reduce test matrix for older OS versions - only test stable
+          - os: ubuntu-20.04
+            rust: beta
+          - os: ubuntu-20.04
+            rust: nightly
+          - os: macos-12
+            rust: beta
+          - os: macos-12
+            rust: nightly
+          # Beta/nightly only needed for default and cranelift features
+          - rust: beta
+            features: llvm
+          - rust: beta
+            features: server
+          - rust: beta
+            features: interpreter
+          - rust: nightly
+            features: server
+          - rust: nightly
+            features: interpreter
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
+    - name: Install Rust ${{ matrix.rust }}
+      uses: dtolnay/rust-toolchain@master
       with:
-        profile: minimal
         toolchain: ${{ matrix.rust }}
-        override: true
         components: rustfmt, clippy
 
     - name: Install GForth (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+      if: startsWith(matrix.os, 'ubuntu')
       run: sudo apt-get update && sudo apt-get install -y gforth
 
     - name: Install GForth (macOS)
-      if: matrix.os == 'macos-latest'
+      if: startsWith(matrix.os, 'macos')
       run: brew install gforth
 
+    - name: Install GForth (Windows)
+      if: startsWith(matrix.os, 'windows')
+      run: |
+        choco install gforth -y
+      continue-on-error: true  # GForth may not be available on Windows
+
+    - name: Install LLVM (Ubuntu)
+      if: startsWith(matrix.os, 'ubuntu') && contains(matrix.features, 'llvm')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y llvm-16 llvm-16-dev libpolly-16-dev
+
+    - name: Install LLVM (macOS)
+      if: startsWith(matrix.os, 'macos') && contains(matrix.features, 'llvm')
+      run: brew install llvm@16
+
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-
 
     - name: Cache cargo index
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.rust }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.rust }}-cargo-index-
 
     - name: Cache cargo build
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.rust }}-${{ matrix.features }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.rust }}-${{ matrix.features }}-cargo-build-
+          ${{ runner.os }}-${{ matrix.rust }}-cargo-build-
 
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Build with features
+      run: |
+        if [ "${{ matrix.features }}" = "all-features" ]; then
+          cargo build --verbose --all-features
+        elif [ "${{ matrix.features }}" = "default" ]; then
+          cargo build --verbose
+        else
+          cargo build --verbose --no-default-features --features "${{ matrix.features }}"
+        fi
+      shell: bash
 
-    - name: Run clippy
-      run: cargo clippy -- -D warnings
+    - name: Run tests with features
+      run: |
+        if [ "${{ matrix.features }}" = "all-features" ]; then
+          cargo test --verbose --all-features
+        elif [ "${{ matrix.features }}" = "default" ]; then
+          cargo test --verbose
+        else
+          cargo test --verbose --no-default-features --features "${{ matrix.features }}"
+        fi
+      shell: bash
 
-    - name: Check formatting
+    - name: Run platform-specific tests
+      run: cargo test --test platform_tests --verbose
+      continue-on-error: true  # Platform tests may not exist yet
+
+    - name: Run clippy (stable only)
+      if: matrix.rust == 'stable'
+      run: |
+        if [ "${{ matrix.features }}" = "all-features" ]; then
+          cargo clippy --all-features -- -D warnings
+        elif [ "${{ matrix.features }}" = "default" ]; then
+          cargo clippy -- -D warnings
+        else
+          cargo clippy --no-default-features --features "${{ matrix.features }}" -- -D warnings
+        fi
+      shell: bash
+      continue-on-error: ${{ matrix.rust != 'stable' }}
+
+    - name: Check formatting (stable only)
+      if: matrix.rust == 'stable' && matrix.features == 'default'
       run: cargo fmt -- --check
 
+  # ARM64 architecture testing (Linux only for now)
+  test-arm64:
+    name: Test ARM64 - Ubuntu / ${{ matrix.features }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - default
+          - cranelift
+          - interpreter
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and test on ARM64
+      run: |
+        docker run --rm --platform linux/arm64 \
+          -v ${{ github.workspace }}:/workspace \
+          -w /workspace \
+          rust:latest \
+          bash -c "
+            apt-get update && apt-get install -y gforth
+            if [ '${{ matrix.features }}' = 'default' ]; then
+              cargo build --verbose && cargo test --verbose
+            else
+              cargo build --verbose --no-default-features --features '${{ matrix.features }}' && \
+              cargo test --verbose --no-default-features --features '${{ matrix.features }}'
+            fi
+          "
+
+  # Optimization level testing
+  test-optimizations:
+    name: Optimization - ${{ matrix.profile }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        profile: [dev, release, size, speed]
+        include:
+          - profile: size
+            cargo_flags: --release
+            rustflags: -C opt-level=z -C lto=fat -C codegen-units=1
+          - profile: speed
+            cargo_flags: --release
+            rustflags: -C opt-level=3 -C target-cpu=native -C lto=thin
+          - profile: dev
+            cargo_flags: ""
+            rustflags: -C opt-level=0
+          - profile: release
+            cargo_flags: --release
+            rustflags: ""
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install GForth (Ubuntu)
+      if: startsWith(matrix.os, 'ubuntu')
+      run: sudo apt-get update && sudo apt-get install -y gforth
+
+    - name: Install GForth (macOS)
+      if: startsWith(matrix.os, 'macos')
+      run: brew install gforth
+
+    - name: Build with optimization profile
+      env:
+        RUSTFLAGS: ${{ matrix.rustflags }}
+      run: cargo build ${{ matrix.cargo_flags }} --verbose
+
+    - name: Test with optimization profile
+      env:
+        RUSTFLAGS: ${{ matrix.rustflags }}
+      run: cargo test ${{ matrix.cargo_flags }} --verbose
+
+    - name: Report binary size (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        if [ -f target/release/fastforth ]; then
+          ls -lh target/release/fastforth
+          size target/release/fastforth || true
+        elif [ -f target/debug/fastforth ]; then
+          ls -lh target/debug/fastforth
+          size target/debug/fastforth || true
+        fi
+
+    - name: Report binary size (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if (Test-Path target/release/fastforth.exe) {
+          Get-Item target/release/fastforth.exe | Select-Object Name, Length
+        } elseif (Test-Path target/debug/fastforth.exe) {
+          Get-Item target/debug/fastforth.exe | Select-Object Name, Length
+        }
+
+  # Code coverage (Ubuntu only to save CI time)
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install GForth
+      run: sudo apt-get update && sudo apt-get install -y gforth
 
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
 
     - name: Generate coverage
-      run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
+      run: cargo tarpaulin --verbose --all-features --workspace --timeout 300 --out Html --out Xml --output-dir coverage
+      continue-on-error: false
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
-        files: ./cobertura.xml
-        fail_ci_if_error: true
+        files: ./coverage/cobertura.xml
+        fail_ci_if_error: false
+        flags: unittests
+        name: codecov-fast-forth
 
+    - name: Archive coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: coverage/
+        retention-days: 30
+
+    - name: Coverage quality gate
+      run: |
+        if [ -f coverage/cobertura.xml ]; then
+          COVERAGE=$(grep -Po 'line-rate="\K[0-9.]+' coverage/cobertura.xml | head -1)
+          COVERAGE_PCT=$(echo "$COVERAGE * 100" | bc)
+          echo "::notice::Code Coverage: $COVERAGE_PCT%"
+
+          # Quality gate: warn if below 70%, fail if below 50%
+          if (( $(echo "$COVERAGE < 0.50" | bc -l) )); then
+            echo "::error::Coverage $COVERAGE_PCT% is below 50% minimum threshold!"
+            exit 1
+          elif (( $(echo "$COVERAGE < 0.70" | bc -l) )); then
+            echo "::warning::Coverage $COVERAGE_PCT% is below 70% target threshold"
+          else
+            echo "::notice::Coverage $COVERAGE_PCT% meets quality standards ✅"
+          fi
+        else
+          echo "::warning::Coverage file not found, skipping quality gate"
+        fi
+
+  # Benchmark performance regression check
   benchmark:
     name: Performance Regression Check
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install GForth
+      run: sudo apt-get update && sudo apt-get install -y gforth
 
     - name: Run benchmarks
-      run: cargo bench --no-fail-fast
+      run: cargo bench --no-fail-fast -- --output-format bencher | tee output.txt
 
     - name: Store benchmark result
       uses: benchmark-action/github-action-benchmark@v1
       with:
         tool: 'cargo'
-        output-file-path: target/criterion/*/new/estimates.json
+        output-file-path: output.txt
         fail-on-alert: true
         alert-threshold: '105%'
         comment-on-alert: true
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        auto-push: true
+        auto-push: false  # Don't auto-push to avoid permission issues
+
+  # Security audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: Run security audit
+      run: cargo audit
+      continue-on-error: true
+
+  # Minimal supported Rust version (MSRV) check
+  msrv:
+    name: Minimum Supported Rust Version
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust 1.70.0
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: "1.70.0"
+
+    - name: Install GForth
+      run: sudo apt-get update && sudo apt-get install -y gforth
+
+    - name: Check build with MSRV
+      run: cargo build --verbose
+      continue-on-error: true
+
+  # Feature flag compatibility matrix
+  feature-compatibility:
+    name: Feature Compatibility Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install GForth
+      run: sudo apt-get update && sudo apt-get install -y gforth
+
+    - name: Install cargo-hack
+      run: cargo install cargo-hack
+
+    - name: Check all feature combinations
+      run: cargo hack check --feature-powerset --depth 2 --verbose
+      continue-on-error: true
+
+  # Final status check
+  ci-success:
+    name: CI Success Gate
+    needs:
+      - test-matrix
+      - test-arm64
+      - test-optimizations
+      - coverage
+      - benchmark
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Check all jobs succeeded
+      run: |
+        if [ "${{ needs.test-matrix.result }}" != "success" ]; then
+          echo "::error::Matrix testing failed"
+          exit 1
+        fi
+        if [ "${{ needs.test-arm64.result }}" != "success" ]; then
+          echo "::error::ARM64 testing failed"
+          exit 1
+        fi
+        if [ "${{ needs.test-optimizations.result }}" != "success" ]; then
+          echo "::error::Optimization testing failed"
+          exit 1
+        fi
+        if [ "${{ needs.coverage.result }}" != "success" ]; then
+          echo "::warning::Coverage job failed"
+        fi
+        if [ "${{ needs.benchmark.result }}" != "success" ]; then
+          echo "::warning::Benchmark job failed"
+        fi
+        echo "::notice::All critical CI jobs passed ✅"

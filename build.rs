@@ -19,6 +19,7 @@ fn main() {
         .file("runtime/ffi.c")
         .file("runtime/bootstrap.c")
         .file("runtime/concurrency.c")
+        .file("runtime/test_wrappers.c")
         .include("runtime")
         .flag_if_supported("-pthread")
         .flag_if_supported("-O3")

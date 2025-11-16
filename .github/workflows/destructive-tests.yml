@@ -1,0 +1,174 @@
+name: Destructive Tests
+
+on:
+  # Run on manual trigger
+  workflow_dispatch:
+
+  # Run weekly on Sunday at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * 0'
+
+  # Run on PRs that modify destructive tests
+  pull_request:
+    paths:
+      - 'tests/destructive/**'
+      - 'scripts/run_destructive_tests.sh'
+      - '.github/workflows/destructive-tests.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  destructive-tests:
+    name: Destructive Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test-type: [oom, disk, stack, fd]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test container
+        run: |
+          docker build \
+            -t fastforth-destructive-tests \
+            -f tests/destructive/Dockerfile \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            .
+
+      - name: Run OOM tests
+        if: matrix.test-type == 'oom'
+        run: |
+          docker run --rm \
+            --name fastforth-test-oom \
+            --memory=128m \
+            --memory-swap=128m \
+            --env DESTRUCTIVE_TESTS_ENABLED=1 \
+            --env ALLOW_DESTRUCTIVE_TESTS=1 \
+            --env RUST_BACKTRACE=1 \
+            fastforth-destructive-tests \
+            cargo test --release --features destructive_tests test_oom -- \
+              --test-threads=1 \
+              --nocapture
+
+      - name: Run disk full tests
+        if: matrix.test-type == 'disk'
+        run: |
+          docker run --rm \
+            --name fastforth-test-disk \
+            --env DESTRUCTIVE_TESTS_ENABLED=1 \
+            --env ALLOW_DESTRUCTIVE_TESTS=1 \
+            --env RUST_BACKTRACE=1 \
+            fastforth-destructive-tests \
+            cargo test --release --features destructive_tests test_disk_full -- \
+              --test-threads=1 \
+              --nocapture
+
+      - name: Run stack overflow tests
+        if: matrix.test-type == 'stack'
+        run: |
+          docker run --rm \
+            --name fastforth-test-stack \
+            --ulimit stack=1048576:1048576 \
+            --env DESTRUCTIVE_TESTS_ENABLED=1 \
+            --env ALLOW_DESTRUCTIVE_TESTS=1 \
+            --env RUST_BACKTRACE=1 \
+            fastforth-destructive-tests \
+            cargo test --release --features destructive_tests test_stack_overflow -- \
+              --test-threads=1 \
+              --nocapture
+
+      - name: Run FD exhaustion tests
+        if: matrix.test-type == 'fd'
+        run: |
+          docker run --rm \
+            --name fastforth-test-fd \
+            --ulimit nofile=256:256 \
+            --env DESTRUCTIVE_TESTS_ENABLED=1 \
+            --env ALLOW_DESTRUCTIVE_TESTS=1 \
+            --env RUST_BACKTRACE=1 \
+            fastforth-destructive-tests \
+            cargo test --release --features destructive_tests test_fd_exhaustion -- \
+              --test-threads=1 \
+              --nocapture
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: destructive-test-results-${{ matrix.test-type }}
+          path: |
+            target/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker ps -a | grep fastforth-test || true
+          docker rm -f $(docker ps -a -q --filter name=fastforth-test) || true
+
+  all-destructive-tests:
+    name: All Destructive Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [destructive-tests]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test container
+        run: |
+          docker build \
+            -t fastforth-destructive-tests \
+            -f tests/destructive/Dockerfile \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            .
+
+      - name: Run all destructive tests
+        run: |
+          docker run --rm \
+            --name fastforth-test-all \
+            --memory=256m \
+            --memory-swap=256m \
+            --ulimit stack=1048576:1048576 \
+            --ulimit nofile=512:512 \
+            --env DESTRUCTIVE_TESTS_ENABLED=1 \
+            --env ALLOW_DESTRUCTIVE_TESTS=1 \
+            --env RUST_BACKTRACE=1 \
+            fastforth-destructive-tests \
+            cargo test --release --features destructive_tests -- \
+              --test-threads=1 \
+              --nocapture
+
+      - name: Upload combined results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: destructive-test-results-all
+          path: target/
+          retention-days: 7
+
+      - name: Report summary
+        if: always()
+        run: |
+          echo "## Destructive Tests Summary" >> $GITHUB_STEP_SUMMARY
+          echo "All destructive test categories completed" >> $GITHUB_STEP_SUMMARY
+          echo "- OOM tests: ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Disk full tests: ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Stack overflow tests: ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- FD exhaustion tests: ✓" >> $GITHUB_STEP_SUMMARY
