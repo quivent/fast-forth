@@ -102,10 +102,9 @@ impl ConstantFolder {
 
     /// Fold constants in a word definition
     fn fold_word(&self, word: &WordDef) -> Result<WordDef> {
-        let mut optimized = word.clone();
-        optimized.instructions = self.fold_sequence(&word.instructions)?;
-        optimized.update();
-        Ok(optimized)
+        // Don't fold word definitions - they work with caller's stack
+        // Only fold when we have concrete values (in main sequence or after inlining)
+        Ok(word.clone())
     }
 
     /// Fold constants in an instruction sequence
@@ -117,6 +116,13 @@ impl ConstantFolder {
             match self.fold_instruction(inst, &mut stack) {
                 FoldResult::Instructions(insts) => result.extend(insts),
                 FoldResult::None => {}
+            }
+        }
+
+        // Materialize any remaining constants on the stack
+        for value in stack.stack.iter() {
+            if let Some(v) = value.as_constant() {
+                result.push(Instruction::Literal(v));
             }
         }
 
@@ -132,10 +138,10 @@ impl ConstantFolder {
         use Instruction::*;
 
         match inst {
-            // Literals: push constant value
+            // Literals: push constant value onto abstract stack, don't emit yet
             Literal(v) => {
                 stack.push(Value::Constant(*v));
-                FoldResult::Instructions(smallvec![Literal(*v)])
+                FoldResult::None  // Don't emit yet, will materialize at end if needed
             }
 
             // Binary arithmetic operations
@@ -192,7 +198,12 @@ impl ConstantFolder {
             Dup => {
                 let top = stack.peek(0);
                 stack.push(top.clone());
-                FoldResult::Instructions(smallvec![Dup])
+                // If duplicating a constant, no need to emit Dup
+                if top.as_constant().is_some() {
+                    FoldResult::None
+                } else {
+                    FoldResult::Instructions(smallvec![Dup])
+                }
             }
 
             Drop => {
@@ -204,16 +215,30 @@ impl ConstantFolder {
                 if stack.depth() >= 2 {
                     let a = stack.pop();
                     let b = stack.pop();
+                    // If both are constants, no need to emit Swap
+                    let both_const = a.as_constant().is_some() && b.as_constant().is_some();
                     stack.push(a);
                     stack.push(b);
+                    if both_const {
+                        FoldResult::None
+                    } else {
+                        FoldResult::Instructions(smallvec![Swap])
+                    }
+                } else {
+                    FoldResult::Instructions(smallvec![Swap])
                 }
-                FoldResult::Instructions(smallvec![Swap])
             }
 
             Over => {
                 let second = stack.peek(1);
+                let is_const = second.as_constant().is_some();
                 stack.push(second);
-                FoldResult::Instructions(smallvec![Over])
+                // If copying a constant, no need to emit Over
+                if is_const {
+                    FoldResult::None
+                } else {
+                    FoldResult::Instructions(smallvec![Over])
+                }
             }
 
             // Superinstructions
@@ -222,7 +247,7 @@ impl ConstantFolder {
                     stack.pop();
                     let result = v.wrapping_add(v);
                     stack.push(Value::Constant(result));
-                    FoldResult::Instructions(smallvec![Literal(result)])
+                    FoldResult::None  // Don't emit yet, will materialize at end
                 } else {
                     stack.pop();
                     stack.push(Value::Unknown);
@@ -235,7 +260,7 @@ impl ConstantFolder {
                     stack.pop();
                     let result = v.wrapping_mul(v);
                     stack.push(Value::Constant(result));
-                    FoldResult::Instructions(smallvec![Literal(result)])
+                    FoldResult::None  // Don't emit yet, will materialize at end
                 } else {
                     stack.pop();
                     stack.push(Value::Unknown);
@@ -286,7 +311,7 @@ impl ConstantFolder {
                 // Both constants: fold!
                 let result = op(av, bv);
                 stack.push(Value::Constant(result));
-                FoldResult::Instructions(smallvec![Instruction::Literal(result)])
+                FoldResult::None  // Don't emit yet, will materialize at end
             }
             _ => {
                 // Not both constants: keep original instruction
@@ -313,7 +338,7 @@ impl ConstantFolder {
                 // Constant: fold!
                 let result = op(av);
                 stack.push(Value::Constant(result));
-                FoldResult::Instructions(smallvec![Instruction::Literal(result)])
+                FoldResult::None  // Don't emit yet, will materialize at end
             }
             None => {
                 // Not constant: keep original instruction

@@ -105,6 +105,11 @@ fn test_specialization_stats_calculation() {
         specializations_created: 5,
         call_sites_rewritten: 15,
         estimated_speedup_percent: 0.0,
+        dispatch_eliminations: 0,
+        avg_specialized_size: 0.0,
+        code_size_increase_percent: 0.0,
+        int_specializations: 0,
+        float_specializations: 0,
     };
 
     stats.calculate_speedup();

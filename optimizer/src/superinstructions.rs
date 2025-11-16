@@ -89,7 +89,12 @@ impl Pattern {
             (Sub, Sub) => true,
             (Mul, Mul) => true,
             (Div, Div) => true,
+            (Eq, Eq) => true,
+            (Lt, Lt) => true,
+            (Gt, Gt) => true,
             (ZeroEq, ZeroEq) => true,
+            (ZeroLt, ZeroLt) => true,
+            (ZeroGt, ZeroGt) => true,
 
             // Literal matches
             (Literal(a), Literal(b)) => a == b,

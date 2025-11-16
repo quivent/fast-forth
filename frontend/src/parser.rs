@@ -466,4 +466,155 @@ mod tests {
         let program = parse_program(": countdown BEGIN dup . 1 - dup 0 = UNTIL drop ;").unwrap();
         assert_eq!(program.definitions.len(), 1);
     }
+
+    #[test]
+    fn test_deeply_nested_definitions() {
+        // Test 15+ levels of nested IF-THEN structures
+        let source = ": deep-nest ( n -- result )
+            dup 0 > IF
+                dup 1 > IF
+                    dup 2 > IF
+                        dup 3 > IF
+                            dup 4 > IF
+                                dup 5 > IF
+                                    dup 6 > IF
+                                        dup 7 > IF
+                                            dup 8 > IF
+                                                dup 9 > IF
+                                                    dup 10 > IF
+                                                        dup 11 > IF
+                                                            dup 12 > IF
+                                                                dup 13 > IF
+                                                                    dup 14 > IF
+                                                                        100
+                                                                    THEN
+                                                                THEN
+                                                            THEN
+                                                        THEN
+                                                    THEN
+                                                THEN
+                                            THEN
+                                        THEN
+                                    THEN
+                                THEN
+                            THEN
+                        THEN
+                    THEN
+                THEN
+            THEN
+        ;";
+        let program = parse_program(source).unwrap();
+        assert_eq!(program.definitions.len(), 1);
+        assert_eq!(program.definitions[0].name, "deep-nest");
+    }
+
+    #[test]
+    fn test_malformed_if_missing_then() {
+        // IF without THEN should produce error
+        // The semicolon terminates the definition, so parser sees unterminated IF
+        let result = parse_program(": broken-if 5 0 > IF 10");
+        assert!(result.is_err());
+        // The error will be either "Unterminated IF" or "Unterminated definition"
+        if let Err(ForthError::ParseError { message, .. }) = result {
+            assert!(
+                message.contains("Unterminated") || message.contains("IF"),
+                "Expected error about unterminated construct, got: {}",
+                message
+            );
+        } else {
+            panic!("Expected ParseError for unterminated IF");
+        }
+    }
+
+    #[test]
+    fn test_unicode_in_strings() {
+        // Unicode characters in string literals
+        // This Forth implementation uses regular double quotes, not S"
+        let program = parse_program(r#": greet " Hello 世界 🌍 " ;"#).unwrap();
+        assert_eq!(program.definitions.len(), 1);
+        // Verify the string literal contains unicode
+        let def = &program.definitions[0];
+        assert!(!def.body.is_empty());
+        // Check that the string word contains unicode
+        if let Some(Word::StringLiteral(s)) = def.body.first() {
+            assert!(s.contains("世界"));
+            assert!(s.contains("🌍"));
+        }
+    }
+
+    #[test]
+    fn test_very_long_identifier() {
+        // Identifier >256 chars - should still parse correctly
+        let long_name = "a".repeat(300);
+        let source = format!(": {} 42 ;", long_name);
+        let program = parse_program(&source).unwrap();
+        assert_eq!(program.definitions.len(), 1);
+        assert_eq!(program.definitions[0].name.len(), 300);
+    }
+
+    #[test]
+    fn test_nested_comments() {
+        // Nested comments - outer comment should consume inner
+        // The lexer supports nested parenthesis comments
+        let program = parse_program(": test-comment ( outer ( inner ) outer ) 42 ;").unwrap();
+        assert_eq!(program.definitions.len(), 1);
+        let def = &program.definitions[0];
+        // Since the comment contains nested parens, it's treated as a regular comment,
+        // not a stack effect comment (which requires -- separator)
+        assert_eq!(def.body.len(), 1); // Just the 42
+
+        // Test with proper stack effect that has nested structure
+        let program2 = parse_program(": test-stack ( n ( inner ) -- result ) 42 ;").unwrap();
+        assert_eq!(program2.definitions.len(), 1);
+    }
+
+    #[test]
+    fn test_unbalanced_stack_comments() {
+        // Stack comment with mismatched input/output counts
+        // Parser should still accept it (semantic validation is separate)
+        let program = parse_program(": unbalanced ( a b -- c d e f g ) + ;").unwrap();
+        assert_eq!(program.definitions.len(), 1);
+        let def = &program.definitions[0];
+        assert!(def.stack_effect.is_some());
+        if let Some(ref effect) = def.stack_effect {
+            assert_eq!(effect.inputs.len(), 2);
+            assert_eq!(effect.outputs.len(), 5);
+        }
+    }
+
+    #[test]
+    fn test_immediate_word_compilation() {
+        // IMMEDIATE word after semicolon
+        let program = parse_program(": test-immediate 42 ; IMMEDIATE").unwrap();
+        assert_eq!(program.definitions.len(), 1);
+        let def = &program.definitions[0];
+        assert!(def.immediate, "Word should be marked as IMMEDIATE");
+    }
+
+    #[test]
+    fn test_unterminated_definition() {
+        // Definition without semicolon should error
+        let result = parse_program(": no-semicolon 42");
+        assert!(result.is_err());
+        if let Err(ForthError::ParseError { message, .. }) = result {
+            assert!(message.contains("Unterminated definition"));
+        } else {
+            panic!("Expected ParseError for unterminated definition");
+        }
+    }
+
+    #[test]
+    fn test_multiple_definitions_with_comments() {
+        // Multiple definitions with various comment styles
+        let source = r#"
+            : first ( n -- n+1 ) 1 + ;
+            : second ( n -- n*2 ) 2 * ;
+            : third ( a b -- sum ) + ;
+        "#;
+        let program = parse_program(source).unwrap();
+        assert_eq!(program.definitions.len(), 3);
+        assert_eq!(program.definitions[0].name, "first");
+        assert_eq!(program.definitions[1].name, "second");
+        assert_eq!(program.definitions[2].name, "third");
+    }
 }

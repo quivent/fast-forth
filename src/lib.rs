@@ -21,6 +21,8 @@ pub mod compiler;
 pub mod pipeline;
 pub mod backend;
 pub mod patterns;
+pub mod engine;
+pub mod runtime_ffi;
 
 // Machine-readable specifications
 pub mod spec;
@@ -50,6 +52,7 @@ pub mod server;
 
 pub use error::{CompileError, Result};
 pub use pipeline::{CompilationPipeline, CompilationMode, CompilationResult};
+pub use engine::ForthEngine;
 
 // Re-export pattern system
 pub use patterns::{

@@ -281,16 +281,50 @@ impl ForthIR {
 
         for token in tokens {
             let inst = match token {
+                // Stack operations
                 "dup" => Instruction::Dup,
                 "drop" => Instruction::Drop,
                 "swap" => Instruction::Swap,
                 "over" => Instruction::Over,
+                "rot" => Instruction::Rot,
+                "nip" => Instruction::Nip,
+                "tuck" => Instruction::Tuck,
+
+                // Arithmetic
                 "+" => Instruction::Add,
                 "-" => Instruction::Sub,
                 "*" => Instruction::Mul,
                 "/" => Instruction::Div,
+                "mod" => Instruction::Mod,
+                "negate" => Instruction::Neg,
+                "abs" => Instruction::Abs,
+
+                // Bitwise
+                "&" | "and" => Instruction::And,
+                "|" | "or" => Instruction::Or,
+                "^" | "xor" => Instruction::Xor,
+                "~" | "not" | "invert" => Instruction::Not,
+                "<<" | "lshift" => Instruction::Shl,
+                ">>" | "rshift" => Instruction::Shr,
+
+                // Comparison
                 "=" => Instruction::Eq,
+                "<>" => Instruction::Ne,
+                "<" => Instruction::Lt,
+                "<=" => Instruction::Le,
+                ">" => Instruction::Gt,
+                ">=" => Instruction::Ge,
                 "0=" => Instruction::ZeroEq,
+                "0<" => Instruction::ZeroLt,
+                "0>" => Instruction::ZeroGt,
+
+                // Control flow
+                "return" => Instruction::Return,
+
+                // Memory
+                "@" | "fetch" => Instruction::Load,
+                "!" | "store" => Instruction::Store,
+
                 _ => {
                     if let Ok(n) = token.parse::<i64>() {
                         Instruction::Literal(n)

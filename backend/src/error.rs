@@ -33,6 +33,9 @@ pub enum BackendError {
     #[error("Module verification failed: {0}")]
     VerificationFailed(String),
 
+    #[error("Cranelift IR verification failed: {0}")]
+    IRVerificationFailed(String),
+
     #[error("Unsupported feature: {0}")]
     UnsupportedFeature(String),
 

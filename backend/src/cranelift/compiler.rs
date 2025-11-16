@@ -12,12 +12,14 @@ use cranelift_codegen::ir::{AbiParam, Function, FuncRef, Signature};
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings::{self, Configurable, Flags};
 use cranelift_codegen::Context;
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_frontend::FunctionBuilderContext;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 use target_lexicon::Triple;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Cranelift backend for Fast Forth
 pub struct CraneliftBackend {
@@ -30,6 +32,8 @@ pub struct CraneliftBackend {
     func_refs: HashMap<String, FuncRef>,
     /// FFI registry for external C function calls
     ffi_registry: FFIRegistry,
+    /// Target ISA for verification
+    isa: Arc<dyn TargetIsa>,
 }
 
 impl CraneliftBackend {
@@ -70,14 +74,14 @@ impl CraneliftBackend {
 
         let flags = Flags::new(flag_builder);
 
-        // Create ISA
+        // Create ISA (returns Arc<dyn TargetIsa>)
         let isa = cranelift_codegen::isa::lookup(triple)
             .map_err(|e| BackendError::Initialization(format!("ISA lookup failed: {}", e)))?
             .finish(flags)
             .map_err(|e| BackendError::Initialization(format!("ISA creation failed: {}", e)))?;
 
-        // Create JIT module
-        let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+        // Create JIT module (JITBuilder::with_isa takes Arc<dyn TargetIsa>)
+        let builder = JITBuilder::with_isa(isa.clone(), cranelift_module::default_libcall_names());
         let mut module = JITModule::new(builder);
 
         // Initialize FFI registry and register libc functions
@@ -92,6 +96,7 @@ impl CraneliftBackend {
             functions: HashMap::new(),
             func_refs: HashMap::new(),
             ffi_registry,
+            isa,
         })
     }
 
@@ -151,6 +156,8 @@ impl CraneliftBackend {
             &mut self.builder_ctx,
             &func_refs_copy,
             &ffi_refs,
+            &self.isa,
+            self.settings.enable_verification,
         );
         translator.translate(ssa_func)?;
 

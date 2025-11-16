@@ -9,7 +9,7 @@
 
 mod compiler;
 mod translator;
-mod ffi;
+pub mod ffi;
 
 pub use compiler::{CraneliftBackend, CraneliftCompiler};
 pub use translator::SSATranslator;
@@ -27,6 +27,8 @@ pub struct CraneliftSettings {
     pub debug_info: bool,
     /// Target triple (defaults to host)
     pub target_triple: Option<&'static str>,
+    /// Enable IR verification (disabled in release builds for performance)
+    pub enable_verification: bool,
 }
 
 impl Default for CraneliftSettings {
@@ -35,6 +37,8 @@ impl Default for CraneliftSettings {
             opt_level: 0,
             debug_info: false,
             target_triple: None,
+            // Enable verification in debug builds, disable in release builds
+            enable_verification: cfg!(debug_assertions),
         }
     }
 }
@@ -46,6 +50,7 @@ impl CraneliftSettings {
             opt_level: 0,
             debug_info: true,
             target_triple: None,
+            enable_verification: true,
         }
     }
 
@@ -55,6 +60,7 @@ impl CraneliftSettings {
             opt_level: 1,
             debug_info: true,
             target_triple: None,
+            enable_verification: true,
         }
     }
 
@@ -64,6 +70,7 @@ impl CraneliftSettings {
             opt_level: 2,
             debug_info: false,
             target_triple: None,
+            enable_verification: false, // Disable for maximum performance
         }
     }
 }

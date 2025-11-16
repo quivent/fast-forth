@@ -9,10 +9,45 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-fast-forth = { path = "../.." }
+fastforth = { path = "../.." }
+fastforth-frontend = { path = "../../frontend" }
+fastforth-optimizer = { path = "../../optimizer" }
+backend = { path = "../../backend", optional = true }
+proptest = "1.4"
+
+[features]
+cranelift = ["backend/cranelift"]
+
+[lib]
+name = "fast_forth_fuzz"
+path = "src/lib.rs"
 
 [[bin]]
 name = "fuzz_parser"
 path = "fuzz_targets/fuzz_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_compiler"
+path = "fuzz_targets/fuzz_compiler.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_ssa"
+path = "fuzz_targets/fuzz_ssa.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_optimizer"
+path = "fuzz_targets/fuzz_optimizer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_codegen"
+path = "fuzz_targets/fuzz_codegen.rs"
 test = false
 doc = false

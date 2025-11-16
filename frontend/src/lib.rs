@@ -14,6 +14,7 @@ pub mod parser;
 pub mod stack_effects;
 pub mod type_inference;
 pub mod ssa;
+pub mod ssa_validator;
 pub mod semantic;
 
 pub use error::{ForthError, Result};
@@ -21,6 +22,7 @@ pub use ast::{Program, Definition, Word, StackEffect};
 pub use parser::parse_program;
 pub use semantic::analyze;
 pub use ssa::{convert_to_ssa, SSAFunction};
+pub use ssa_validator::SSAValidator;
 
 #[cfg(test)]
 mod tests {

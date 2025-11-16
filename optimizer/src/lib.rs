@@ -52,7 +52,7 @@ pub mod cranelift_peephole;
 pub use ir::{ForthIR, Instruction, StackEffect, WordDef};
 pub use stack_cache::StackCacheOptimizer;
 pub use superinstructions::SuperinstructionOptimizer;
-pub use pgo_superinstructions::{PGOOptimizer, PatternDatabase, PGOStats};
+pub use pgo_superinstructions::{PGOOptimizer, PatternDatabase, PGOStats, PGOConfig};
 pub use constant_fold::ConstantFolder;
 pub use dead_code::DeadCodeEliminator;
 pub use inline::InlineOptimizer;

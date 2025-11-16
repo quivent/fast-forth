@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod pgo_integration_tests {
     use fastforth_optimizer::{
-        ForthIR, PGOOptimizer, PGOConfig, Instruction, Optimizer, OptimizationLevel,
+        ForthIR, PGOOptimizer, PGOConfig, OptimizationLevel,
     };
     use std::time::Duration;
 

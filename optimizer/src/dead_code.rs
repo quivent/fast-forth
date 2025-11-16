@@ -72,22 +72,21 @@ impl DeadCodeEliminator {
 
     /// Eliminate dead code in an instruction sequence
     fn eliminate_sequence(&self, instructions: &[Instruction]) -> Result<Vec<Instruction>> {
-        // Perform liveness analysis
-        let liveness = self.analyze_liveness(instructions);
+        // First pass: remove trivial operations
+        let mut result = self.remove_trivial_ops(instructions);
+
+        // Perform liveness analysis on simplified code
+        let liveness = self.analyze_liveness(&result);
 
         // Remove dead instructions
-        let mut result = Vec::new();
-
-        for (i, inst) in instructions.iter().enumerate() {
+        let mut filtered = Vec::new();
+        for (i, inst) in result.iter().enumerate() {
             if self.should_keep(inst, i, &liveness) {
-                result.push(inst.clone());
+                filtered.push(inst.clone());
             }
         }
 
-        // Additional pass: remove trivial operations
-        result = self.remove_trivial_ops(&result);
-
-        Ok(result)
+        Ok(filtered)
     }
 
     /// Analyze which instructions are live (their results are used)
@@ -103,11 +102,18 @@ impl DeadCodeEliminator {
             }
         }
 
+        // Calculate final stack depth to mark final values as live
+        let mut final_stack_depth = 0i32;
+        for inst in instructions.iter() {
+            let effect = inst.stack_effect();
+            final_stack_depth += effect.produced as i32 - effect.consumed as i32;
+        }
+
         // Backward pass to propagate liveness
         let mut changed = true;
         while changed {
             changed = false;
-            let mut stack_depth = 0i32;
+            let mut stack_depth = final_stack_depth; // Start with final depth
 
             for (i, inst) in instructions.iter().enumerate().rev() {
                 let effect = inst.stack_effect();
@@ -120,9 +126,9 @@ impl DeadCodeEliminator {
                     }
                 }
 
-                // Update stack depth
-                stack_depth += effect.consumed as i32;
+                // Update stack depth (going backwards)
                 stack_depth -= effect.produced as i32;
+                stack_depth += effect.consumed as i32;
                 stack_depth = stack_depth.max(0);
             }
         }
@@ -187,6 +193,14 @@ impl DeadCodeEliminator {
                 // literal drop -> (remove both if no side effects)
                 [Instruction::Literal(_), Instruction::Drop, ..] => {
                     i += 2;
+                }
+
+                // Binary operation followed by drop -> remove all 3 (if literals)
+                [Instruction::Literal(_), Instruction::Literal(_), op, Instruction::Drop, ..]
+                    if matches!(op, Instruction::Add | Instruction::Sub | Instruction::Mul
+                                  | Instruction::Div | Instruction::Mod | Instruction::And
+                                  | Instruction::Or | Instruction::Xor) => {
+                    i += 4; // Skip all 4
                 }
 
                 // Keep instruction

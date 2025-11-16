@@ -166,6 +166,14 @@ impl CompilationPipeline {
         let ssa_functions = convert_to_ssa(&program)
             .map_err(|e| CompileError::SSAError(format!("{}", e)))?;
 
+        // Step 5: Validate SSA form
+        debug!("Validating SSA invariants...");
+        for func in &ssa_functions {
+            func.validate()
+                .map_err(|e| CompileError::SSAError(format!("SSA validation failed for {}: {}", func.name, e)))?;
+        }
+        debug!("SSA validation passed for {} functions", ssa_functions.len());
+
         Ok((program, ssa_functions))
     }
 
@@ -308,6 +316,7 @@ impl CompilationPipeline {
             opt_level: 1,
             debug_info: false,
             target_triple: None,
+            enable_verification: cfg!(debug_assertions),
         };
 
         let mut backend = CraneliftBackend::new(settings)

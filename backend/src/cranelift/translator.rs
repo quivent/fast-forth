@@ -11,9 +11,11 @@ use fastforth_frontend::ast::StackType;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, Function, FuncRef, InstBuilder, Value,
 };
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Information about Phi nodes for a block
 #[derive(Debug, Clone)]
@@ -42,6 +44,10 @@ pub struct SSATranslator<'a> {
     /// Actual control flow graph: tracks which blocks jump to which blocks
     /// This is built during translation and may differ from SSA Phi predecessors
     block_predecessors: HashMap<BlockId, Vec<BlockId>>,
+    /// Target ISA for verification
+    isa: &'a Arc<dyn TargetIsa>,
+    /// Whether to enable IR verification
+    enable_verification: bool,
 }
 
 impl<'a> SSATranslator<'a> {
@@ -51,6 +57,8 @@ impl<'a> SSATranslator<'a> {
         builder_ctx: &'a mut FunctionBuilderContext,
         func_refs: &'a HashMap<String, FuncRef>,
         ffi_refs: &'a HashMap<String, FuncRef>,
+        isa: &'a Arc<dyn TargetIsa>,
+        enable_verification: bool,
     ) -> Self {
         let builder = FunctionBuilder::new(func, builder_ctx);
 
@@ -63,6 +71,8 @@ impl<'a> SSATranslator<'a> {
             func_refs,
             ffi_refs,
             block_predecessors: HashMap::new(),
+            isa,
+            enable_verification,
         }
     }
 
@@ -124,8 +134,30 @@ impl<'a> SSATranslator<'a> {
             self.builder.seal_block(cl_block);
         }
 
-        // Finalize function
+        // Verify IR if enabled (must be done BEFORE finalize since finalize consumes self)
+        if self.enable_verification {
+            self.verify_ir()?;
+        }
+
+        // Finalize function (consumes the builder)
         self.builder.finalize();
+
+        Ok(())
+    }
+
+    /// Verify the generated Cranelift IR
+    fn verify_ir(&self) -> Result<()> {
+        use cranelift_codegen::verify_function;
+
+        // Access the function from the builder (borrowing, not moving)
+        let func = &self.builder.func;
+
+        // Perform verification
+        if let Err(errors) = verify_function(func, self.isa.as_ref()) {
+            return Err(BackendError::IRVerificationFailed(
+                format!("IR verification failed:\n{}", errors)
+            ));
+        }
 
         Ok(())
     }
@@ -692,7 +724,7 @@ impl<'a> SSATranslator<'a> {
     fn collect_branch_args(&self, target_block: BlockId, from_block: &BlockId) -> Result<Vec<Value>> {
         if let Some(phi_infos) = self.phi_nodes.get(&target_block) {
             let mut args = Vec::new();
-            for phi_info in phi_infos.iter() {
+            for (phi_index, phi_info) in phi_infos.iter().enumerate() {
                 // Try to find the incoming value from our current block directly
                 if let Some((_, reg)) = phi_info.incoming.iter()
                     .find(|(block_id, _)| block_id == from_block)
@@ -709,22 +741,23 @@ impl<'a> SSATranslator<'a> {
                     // actual execution creates intermediate merge blocks (inner merge) that
                     // jump to the outer merge.
                     //
-                    // Solution: Use the Phi destination from from_block. This represents
-                    // the merged value that should be passed forward.
+                    // Solution: Use the Phi destination from from_block. When there are
+                    // multiple Phi nodes, match them by index since SSA generation creates
+                    // Phi nodes in consistent order across all merge blocks.
 
                     if let Some(from_phi_infos) = self.phi_nodes.get(from_block) {
-                        // Use the first Phi's destination
-                        // In the common case of nested if-then-else, there's typically one
-                        // Phi per value being merged
-                        if let Some(from_phi) = from_phi_infos.first() {
+                        // Match Phi nodes by index - the i-th Phi in target_block
+                        // corresponds to the i-th Phi in from_block
+                        if let Some(from_phi) = from_phi_infos.get(phi_index) {
                             let value = self.get_register(from_phi.dest)?;
                             args.push(value);
                         } else {
                             return Err(BackendError::CodeGeneration(
                                 format!(
-                                    "Phi node in block {:?} missing incoming value from block {:?}. \
-                                     Block {:?} has no Phi nodes.",
-                                    target_block, from_block, from_block
+                                    "Phi node {} in block {:?} missing incoming value from block {:?}. \
+                                     Block {:?} has {} Phi nodes but expected at least {}.",
+                                    phi_index, target_block, from_block, from_block,
+                                    from_phi_infos.len(), phi_index + 1
                                 )
                             ));
                         }

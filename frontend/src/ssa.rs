@@ -276,6 +276,21 @@ impl SSAFunction {
             entry_block: BlockId(0),
         }
     }
+
+    /// Validate SSA form invariants
+    ///
+    /// This performs comprehensive validation including:
+    /// - Single assignment: each register assigned exactly once
+    /// - Dominance: all uses dominated by definitions
+    /// - Phi node validity: correct placement and incoming edges
+    /// - Use-before-def: all registers defined before use
+    /// - Block connectivity: no unreachable blocks
+    /// - Type consistency: stack depth matches at merge points
+    pub fn validate(&self) -> Result<()> {
+        use crate::ssa_validator::SSAValidator;
+        let mut validator = SSAValidator::new(self);
+        validator.validate()
+    }
 }
 
 /// SSA converter
@@ -314,6 +329,8 @@ impl SSAConverter {
     fn emit(&mut self, instruction: SSAInstruction) {
         if let Some(block) = self.blocks.iter_mut().find(|b| b.id == self.current_block) {
             block.instructions.push(instruction);
+        } else {
+            debug_assert!(false, "Attempting to emit instruction to non-existent block {:?}", self.current_block);
         }
     }
 
@@ -653,7 +670,7 @@ impl SSAConverter {
                         found: stack.len(),
                     });
                 }
-                let mode_len = stack.pop().unwrap();
+                let _mode_len = stack.pop().unwrap();
                 let mode = stack.pop().unwrap();
                 let path_len = stack.pop().unwrap();
                 let path_addr = stack.pop().unwrap();
@@ -683,7 +700,7 @@ impl SSAConverter {
                         found: stack.len(),
                     });
                 }
-                let mode_len = stack.pop().unwrap();
+                let _mode_len = stack.pop().unwrap();
                 let mode = stack.pop().unwrap();
                 let path_len = stack.pop().unwrap();
                 let path_addr = stack.pop().unwrap();
@@ -970,22 +987,25 @@ impl SSAConverter {
         let mut then_stack = original_stack.clone();
         self.convert_sequence(then_branch, &mut then_stack)?;
         let then_final = then_stack.clone();
+        // Track which block we're actually in after conversion (may differ from then_block if nested control flow)
+        let actual_then_block = self.current_block;
         self.emit(SSAInstruction::Jump {
             target: merge_block,
         });
 
         // Convert else branch if present, otherwise use original stack
-        let else_final = if let Some(else_words) = else_branch {
+        let (else_final, actual_else_block) = if let Some(else_words) = else_branch {
             self.set_current_block(else_block);
             let mut else_stack = original_stack.clone();
             self.convert_sequence(else_words, &mut else_stack)?;
             let result = else_stack.clone();
+            let actual_block = self.current_block;
             self.emit(SSAInstruction::Jump {
                 target: merge_block,
             });
-            result
+            (result, actual_block)
         } else {
-            original_stack.clone()
+            (original_stack.clone(), else_block)
         };
 
         // Verify same stack depth from both branches
@@ -1002,28 +1022,45 @@ impl SSAConverter {
             });
         }
 
+        debug_assert_eq!(
+            then_final.len(),
+            else_final.len(),
+            "Branch stack depths must match for SSA Phi generation"
+        );
+
         // Continue from merge block
         self.set_current_block(merge_block);
 
         // Generate Phi nodes to merge values from both branches
+        // Use the ACTUAL blocks that jump to merge_block, not the initial branch targets
         let mut merged_stack = Vec::new();
-        for (i, (&then_reg, &else_reg)) in then_final.iter().zip(else_final.iter()).enumerate() {
+        for (&then_reg, &else_reg) in then_final.iter().zip(else_final.iter()) {
             if then_reg == else_reg {
                 // Same register from both branches - no merge needed
                 merged_stack.push(then_reg);
             } else {
                 // Different registers - need Phi to merge
                 let phi_reg = self.fresh_register();
+                debug_assert!(
+                    phi_reg.0 >= self.next_register - 1,
+                    "Phi register should be freshly allocated"
+                );
                 self.emit(SSAInstruction::Phi {
                     dest: phi_reg,
                     incoming: vec![
-                        (then_block, then_reg),
-                        (else_block, else_reg),
+                        (actual_then_block, then_reg),
+                        (actual_else_block, else_reg),
                     ],
                 });
                 merged_stack.push(phi_reg);
             }
         }
+
+        debug_assert_eq!(
+            merged_stack.len(),
+            then_final.len(),
+            "Merged stack must have same size as input branches"
+        );
 
         *stack = merged_stack;
         Ok(())
@@ -1463,5 +1500,189 @@ mod tests {
 
         let output = format!("{}", functions[0]);
         assert!(output.contains("define add-one"));
+    }
+
+    #[test]
+    fn test_stack_underflow_detection() {
+        // Test that stack underflow is detected during SSA conversion
+        // Use a word with explicit no-param stack effect to force underflow
+        let program = parse_program(": underflow ( -- ) dup + ;").unwrap();
+        let result = convert_to_ssa(&program);
+        assert!(result.is_err(), "Expected stack underflow error");
+        if let Err(ForthError::StackUnderflow { word, expected, found }) = result {
+            assert_eq!(word, "dup");
+            assert_eq!(expected, 1);
+            assert_eq!(found, 0);
+        } else {
+            panic!("Expected StackUnderflow error, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_maximum_stack_depth() {
+        // Test stack operations at maximum depth (100+ items)
+        let mut source = String::from(": max-stack");
+        for i in 0..150 {
+            source.push_str(&format!(" {}", i));
+        }
+        source.push_str(" ;");
+
+        let program = parse_program(&source).unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+        // Verify it generated all the loads
+        let func = &functions[0];
+        assert!(!func.blocks.is_empty());
+    }
+
+    #[test]
+    fn test_complex_control_flow_phi_nodes() {
+        // Test Phi node generation in complex IF-ELSE branches
+        let program = parse_program(
+            ": complex-phi ( n -- result )
+                dup 0 > IF
+                    10 +
+                ELSE
+                    20 -
+                THEN
+            ;"
+        ).unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+
+        // Check that Phi nodes are generated for the merged value
+        let func = &functions[0];
+        let has_phi = func.blocks.iter().any(|block| {
+            block.instructions.iter().any(|inst| {
+                matches!(inst, SSAInstruction::Phi { .. })
+            })
+        });
+        assert!(has_phi, "Expected Phi node for IF-ELSE merge");
+    }
+
+    #[test]
+    fn test_nested_loops_ssa() {
+        // Test nested DO loops generate correct SSA structure
+        let program = parse_program(
+            ": nested-loops ( -- )
+                10 0 DO
+                    5 0 DO
+                        i j +
+                    LOOP
+                LOOP
+            ;"
+        ).unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+        let func = &functions[0];
+        assert!(func.blocks.len() > 1, "Nested loops should create multiple blocks");
+    }
+
+    #[test]
+    fn test_string_literal_ssa_conversion() {
+        // Test that string literals produce correct SSA (addr + len)
+        // This Forth uses double quotes, not S"
+        let program = parse_program(r#": test-string " Hello World " ;"#).unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+
+        let func = &functions[0];
+        let has_load_string = func.blocks[0].instructions.iter().any(|inst| {
+            matches!(inst, SSAInstruction::LoadString { .. })
+        });
+        assert!(has_load_string, "Expected LoadString instruction for string literal");
+    }
+
+    #[test]
+    fn test_stack_manipulation_ssa() {
+        // Test complex stack manipulation (dup, swap, over, rot)
+        let program = parse_program(": stack-ops ( a b c -- b c a b ) rot swap dup ;").unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].parameters.len(), 3);
+    }
+
+    #[test]
+    fn test_memory_operations_ssa() {
+        // Test memory load and store operations
+        let program = parse_program(": mem-test ( addr value -- ) swap ! ;").unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+
+        let func = &functions[0];
+        let has_store = func.blocks[0].instructions.iter().any(|inst| {
+            matches!(inst, SSAInstruction::Store { .. })
+        });
+        assert!(has_store, "Expected Store instruction");
+    }
+
+    #[test]
+    fn test_file_io_operations_ssa() {
+        // Test file I/O operations generate correct SSA
+        // This Forth uses double quotes, not S"
+        let program = parse_program(
+            r#": test-file ( -- )
+                " test.txt " r/o open-file
+                close-file
+            ;"#
+        ).unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+
+        let func = &functions[0];
+        let has_file_ops = func.blocks[0].instructions.iter().any(|inst| {
+            matches!(inst, SSAInstruction::FileOpen { .. }) ||
+            matches!(inst, SSAInstruction::FileClose { .. })
+        });
+        assert!(has_file_ops, "Expected file I/O instructions");
+    }
+
+    #[test]
+    fn test_begin_while_repeat_ssa() {
+        // Test BEGIN-WHILE-REPEAT loop structure
+        let program = parse_program(
+            ": while-loop ( n -- )
+                BEGIN
+                    dup 0 >
+                WHILE
+                    1 -
+                REPEAT
+                drop
+            ;"
+        ).unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+
+        let func = &functions[0];
+        assert!(func.blocks.len() >= 3, "WHILE-REPEAT should create multiple blocks");
+    }
+
+    #[test]
+    fn test_empty_function_body() {
+        // Test function with empty body
+        let program = parse_program(": noop ;").unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+
+        // Empty function should still have return instruction
+        let func = &functions[0];
+        let has_return = func.blocks[0].instructions.iter().any(|inst| {
+            matches!(inst, SSAInstruction::Return { .. })
+        });
+        assert!(has_return, "Empty function should have return instruction");
+    }
+
+    #[test]
+    fn test_parameter_inference() {
+        // Test that parameter count is correctly inferred from stack usage
+        let program = parse_program(": inferred-params dup * + ;").unwrap();
+        let functions = convert_to_ssa(&program).unwrap();
+        assert_eq!(functions.len(), 1);
+
+        // dup requires 1, * requires 2, + requires 2
+        // Stack analysis: start with n (1 param), dup -> n n (2), * -> n*n (1), + requires 2
+        // So minimum 2 parameters needed
+        let func = &functions[0];
+        assert!(func.parameters.len() >= 2, "Should infer at least 2 parameters");
     }
 }

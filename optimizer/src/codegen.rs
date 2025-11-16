@@ -192,7 +192,14 @@ static cell_t* rsp = rstack;
 
 /// Sanitize word name for C identifier
 fn sanitize_name(name: &str) -> String {
-    name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_")
+    let mut result = name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_");
+
+    // C identifiers can't start with a digit, replace leading digits with underscore
+    if result.chars().next().map_or(false, |c| c.is_numeric()) {
+        result = format!("_{}", &result[1..]);
+    }
+
+    result
 }
 
 #[cfg(test)]
