@@ -1,58 +1,6 @@
-# Build artifacts
-/target
-*.o
-*.a
-*.so
-*.dylib
-*.dll
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Embedded source (generated at build time)
-embedded_source.tar.gz
-
-# CRITICAL: Prevent binary-in-binary recursion
-# These binaries are in release/ and should NOT be embedded
-release/fastforth*
-release/*.exe
-release/*.tar.gz
-
-# Minimal Forth compiler output
-minimal_forth/forth
-forth
-
-# TinyCC build artifacts
-tinycc/tcc-*
-tinycc/*.tar.bz2
-
-# Temporary files
-/tmp
-*.tmp
-
-# Test outputs
-*.test
-test_results/
-
-# Benchmarks
-*.bench
-benchmarks/*.out
-
-# Documentation builds
-docs/_build/
-*.pdf
-
-# Cargo locks
-Cargo.lock
-cli/Cargo.lock
-
-# CLI build artifacts
-cli/target/
+# Build artifacts and generated files
+build_rs_cov.profraw
+*.profraw
+tests/fuzz/target/
+fuzz/target/
+target/

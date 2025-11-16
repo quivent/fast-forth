@@ -1,0 +1,149 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    FAST FORTH FUZZING - QUICK REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IMMEDIATE COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Verify Setup:           ./scripts/verify_fuzz_setup.sh
+Quick Test (25 min):    ./scripts/quick_fuzz.sh
+Overnight (8 hours):    ./scripts/fuzz_overnight.sh
+Custom Duration:        FUZZ_DURATION_HOURS=12 ./scripts/fuzz_overnight.sh
+Analyze Crashes:        ./scripts/analyze_crashes.sh tests/fuzz/artifacts/
+View Report:            open tests/fuzz/overnight_reports/fuzz_report_*.html
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FUZZING TARGETS (5 total)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+fuzz_parser      Parser robustness        ~5M execs/8h
+fuzz_compiler    End-to-end compilation   ~500k execs/8h
+fuzz_ssa         SSA construction         ~1M execs/8h
+fuzz_optimizer   Optimization passes      ~300k execs/8h
+fuzz_codegen     Code generation          ~200k execs/8h
+
+TOTAL: ~7M executions per 8 hours
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MANUAL FUZZING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+cd tests/fuzz
+
+Run Target (1 hour):
+    cargo +nightly fuzz run fuzz_parser -- -max_total_time=3600
+
+Property Tests (100k):
+    PROPTEST_CASES=100000 cargo test --lib
+
+Differential Tests:
+    cargo test differential_tests
+
+Stress Tests:
+    cargo test stress_tests
+
+Coverage Report:
+    cargo +nightly fuzz coverage fuzz_parser
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CRASH WORKFLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Analyze:     ./scripts/analyze_crashes.sh tests/fuzz/artifacts/
+2. Reproduce:   cargo +nightly fuzz run fuzz_parser artifacts/fuzz_parser/crash-*
+3. Debug:       RUST_BACKTRACE=1 cargo +nightly fuzz run fuzz_parser crash-*
+4. Minimize:    cargo +nightly fuzz cmin fuzz_parser
+5. Fix:         (implement fix)
+6. Regress:     cp crash-* tests/regression/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PERFORMANCE EXPECTATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Duration    Parser      Compiler    Test Cases  Use Case
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5 min       ~50k        ~5k         ~60k        Pre-commit
+1 hour      ~600k       ~60k        ~160k       CI
+8 hours     ~5M         ~500k       ~210k       Overnight
+24 hours    ~15M        ~1.5M       ~600k       Weekend
+48 hours    ~30M        ~3M         ~1.2M       Release
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONFIGURATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Duration:               export FUZZ_DURATION_HOURS=12
+PropTest Cases:         export PROPTEST_CASES=100000
+PropTest Shrinking:     export PROPTEST_MAX_SHRINK_ITERS=10000
+
+LibFuzzer Options (pass after --):
+    -max_total_time=3600        Duration (seconds)
+    -timeout=10                 Per-test timeout
+    -rss_limit_mb=2048          Memory limit
+    -print_final_stats=1        Show statistics
+    -dict=dictionary.txt        Use dictionary
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DOCUMENTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Quick Start:        tests/fuzz/QUICK_START.md
+Setup Guide:        FUZZING_SETUP.md
+Reference:          fuzz/README.md
+Summary:            FUZZING_COMPLETE.md
+This Card:          FUZZING_QUICKREF.txt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+OUTPUT LOCATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Crashes:            tests/fuzz/artifacts/
+                    tests/fuzz/overnight_reports/crashes/
+Corpus:             tests/fuzz/corpus/
+Reports:            tests/fuzz/overnight_reports/*.html
+Logs:               tests/fuzz/overnight_reports/*.log
+PropTest Failures:  tests/fuzz/proptest-regressions/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEVELOPMENT WORKFLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before Commit:      ./scripts/quick_fuzz.sh
+Before PR:          PROPTEST_CASES=10000 cargo test --lib
+Nightly CI:         FUZZ_DURATION_HOURS=1 ./scripts/fuzz_overnight.sh
+Before Release:     FUZZ_DURATION_HOURS=24 ./scripts/fuzz_overnight.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+cargo-fuzz not found:
+    cargo +nightly install cargo-fuzz
+
+Nightly not installed:
+    rustup install nightly
+
+Build errors:
+    cd tests/fuzz && cargo clean && cargo build --bins
+
+Out of memory:
+    Edit fuzz_overnight.sh, add: -rss_limit_mb=2048
+
+GForth missing (optional):
+    macOS:  brew install gforth
+    Linux:  apt install gforth
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NEXT ACTION: ./scripts/fuzz_overnight.sh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
