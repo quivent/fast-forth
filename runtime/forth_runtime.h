@@ -27,6 +27,12 @@ typedef uint8_t byte_t;       // Byte type
 #define DICTIONARY_SIZE (1024 * 1024)  // 1MB initial dictionary
 
 // ============================================================================
+// FORWARD DECLARATIONS
+// ============================================================================
+
+typedef struct word_header word_header_t;
+
+// ============================================================================
 // FORTH VIRTUAL MACHINE STATE
 // ============================================================================
 
@@ -46,7 +52,7 @@ typedef struct {
 
     // Compilation state
     bool compiling;       // true when compiling, false when interpreting
-    cell_t *last_word;    // Pointer to last defined word
+    word_header_t *last_word;    // Pointer to last defined word
 
     // I/O state
     char *input_buffer;
