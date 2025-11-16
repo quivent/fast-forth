@@ -1,5 +1,8 @@
 # Fast-Forth: Native Forth JIT Compiler
 
+[![CI](https://github.com/YOUR_USERNAME/fast-forth/actions/workflows/test.yml/badge.svg)](https://github.com/YOUR_USERNAME/fast-forth/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/YOUR_USERNAME/fast-forth/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_USERNAME/fast-forth)
+
 A high-performance Forth compiler targeting native machine code via Cranelift JIT.
 
 ## 🎉 Current Status: Working JIT Compiler!
@@ -31,8 +34,10 @@ cargo test
 ## Documentation
 
 - **[STATUS.md](STATUS.md)** - Current implementation status and test results
-- **[ROADMAP.md](ROADMAP.md)** - Detailed next steps for full functionality  
+- **[ROADMAP.md](ROADMAP.md)** - Detailed next steps for full functionality
 - **[COMPLETION_SUMMARY.md](COMPLETION_SUMMARY.md)** - Comprehensive implementation summary
+- **[COVERAGE.md](COVERAGE.md)** - Code coverage documentation and measurement guide
+- **[COVERAGE_GAP_ANALYSIS.md](COVERAGE_GAP_ANALYSIS.md)** - Detailed coverage gap analysis and improvement plan
 
 ## What's Working
 
