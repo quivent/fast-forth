@@ -1,0 +1,53 @@
+# Docker ignore file for destructive tests
+# Reduces build context size and improves build speed
+
+# Build artifacts
+target/
+*.so
+*.dylib
+*.dll
+*.a
+
+# Test outputs
+test_disk.img
+/tmp/destructive_tests
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in container)
+docs/
+*.md
+!tests/destructive/README.md
+
+# CI configuration
+.github/
+.gitlab-ci.yml
+
+# macOS
+.DS_Store
+
+# Coverage data
+*.profraw
+*.profdata
+coverage/
+
+# Benchmarking results
+benchmark_results/
+*.bench
+
+# Fuzzing artifacts
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+
+# Legacy files
+legacy/
