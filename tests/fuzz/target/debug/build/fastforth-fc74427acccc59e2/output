@@ -1,0 +1,190 @@
+OUT_DIR = Some(/Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/fastforth-fc74427acccc59e2/out)
+OPT_LEVEL = Some(0)
+TARGET = Some(aarch64-apple-darwin)
+CARGO_ENCODED_RUSTFLAGS = Some()
+HOST = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=CC_aarch64-apple-darwin
+CC_aarch64-apple-darwin = None
+cargo:rerun-if-env-changed=CC_aarch64_apple_darwin
+CC_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+RUSTC_WRAPPER = None
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+DEBUG = Some(true)
+cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET
+MACOSX_DEPLOYMENT_TARGET = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64_apple_darwin
+CFLAGS_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64-apple-darwin
+CFLAGS_aarch64-apple-darwin = None
+OUT_DIR = Some(/Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/fastforth-fc74427acccc59e2/out)
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+TARGET = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET
+MACOSX_DEPLOYMENT_TARGET = None
+HOST = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64_apple_darwin
+CFLAGS_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64-apple-darwin
+CFLAGS_aarch64-apple-darwin = None
+OUT_DIR = Some(/Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/fastforth-fc74427acccc59e2/out)
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+TARGET = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET
+MACOSX_DEPLOYMENT_TARGET = None
+HOST = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64_apple_darwin
+CFLAGS_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64-apple-darwin
+CFLAGS_aarch64-apple-darwin = None
+OUT_DIR = Some(/Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/fastforth-fc74427acccc59e2/out)
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+TARGET = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET
+MACOSX_DEPLOYMENT_TARGET = None
+HOST = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64_apple_darwin
+CFLAGS_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64-apple-darwin
+CFLAGS_aarch64-apple-darwin = None
+OUT_DIR = Some(/Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/fastforth-fc74427acccc59e2/out)
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+TARGET = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET
+MACOSX_DEPLOYMENT_TARGET = None
+HOST = Some(aarch64-apple-darwin)
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64_apple_darwin
+CFLAGS_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=CFLAGS_aarch64-apple-darwin
+CFLAGS_aarch64-apple-darwin = None
+cargo:warning=runtime/forth_runtime.c:426:27: warning: unused parameter 'vm' [-Wunused-parameter]
+cargo:warning=  426 | void forth_cr(forth_vm_t *vm) {
+cargo:warning=      |                           ^
+cargo:warning=runtime/forth_runtime.c:431:30: warning: unused parameter 'vm' [-Wunused-parameter]
+cargo:warning=  431 | void forth_space(forth_vm_t *vm) {
+cargo:warning=      |                              ^
+cargo:warning=runtime/forth_runtime.c:471:20: warning: incompatible pointer types initializing 'word_header_t *' (aka 'struct word_header *') with an expression of type 'cell_t *' (aka 'long *') [-Wincompatible-pointer-types]
+cargo:warning=  471 |     word_header_t *word = vm->last_word;
+cargo:warning=      |                    ^      ~~~~~~~~~~~~~
+cargo:warning=runtime/forth_runtime.c:493:18: warning: incompatible pointer types assigning to 'struct word_header *' from 'cell_t *' (aka 'long *') [-Wincompatible-pointer-types]
+cargo:warning=  493 |     header->link = vm->last_word;
+cargo:warning=      |                  ^ ~~~~~~~~~~~~~
+cargo:warning=runtime/forth_runtime.c:508:19: warning: incompatible pointer types assigning to 'cell_t *' (aka 'long *') from 'word_header_t *' (aka 'struct word_header *') [-Wincompatible-pointer-types]
+cargo:warning=  508 |     vm->last_word = header;
+cargo:warning=      |                   ^ ~~~~~~
+cargo:warning=runtime/forth_runtime.c:525:20: warning: incompatible pointer types initializing 'word_header_t *' (aka 'struct word_header *') with an expression of type 'cell_t *' (aka 'long *') [-Wincompatible-pointer-types]
+cargo:warning=  525 |     word_header_t *word = vm->last_word;
+cargo:warning=      |                    ^      ~~~~~~~~~~~~~
+cargo:warning=runtime/forth_runtime.c:536:36: warning: unused parameter 'vm' [-Wunused-parameter]
+cargo:warning=  536 | void forth_dump_memory(forth_vm_t *vm, cell_t addr, size_t count) {
+cargo:warning=      |                                    ^
+cargo:warning=7 warnings generated.
+cargo:warning=runtime/memory.c:134:18: warning: incompatible pointer types assigning to 'struct word_header *' from 'cell_t *' (aka 'long *') [-Wincompatible-pointer-types]
+cargo:warning=  134 |     header->link = vm->last_word;
+cargo:warning=      |                  ^ ~~~~~~~~~~~~~
+cargo:warning=runtime/memory.c:145:19: warning: incompatible pointer types assigning to 'cell_t *' (aka 'long *') from 'word_header_t *' (aka 'struct word_header *') [-Wincompatible-pointer-types]
+cargo:warning=  145 |     vm->last_word = header;
+cargo:warning=      |                   ^ ~~~~~~
+cargo:warning=runtime/memory.c:162:20: warning: incompatible pointer types initializing 'word_header_t *' (aka 'struct word_header *') with an expression of type 'cell_t *' (aka 'long *') [-Wincompatible-pointer-types]
+cargo:warning=  162 |     word_header_t *word = vm->last_word;
+cargo:warning=      |                    ^      ~~~~~~~~~~~~~
+cargo:warning=runtime/memory.c:333:12: warning: unused variable 'dict_free' [-Wunused-variable]
+cargo:warning=  333 |     size_t dict_free = vm->dict_size - dict_used;
+cargo:warning=      |            ^~~~~~~~~
+cargo:warning=runtime/memory.c:352:43: warning: unused parameter 'vm' [-Wunused-parameter]
+cargo:warning=  352 | void forth_compact_dictionary(forth_vm_t *vm) {
+cargo:warning=      |                                           ^
+cargo:warning=runtime/memory.c:44:27: warning: unused function 'dict_create' [-Wunused-function]
+cargo:warning=   44 | static word_dictionary_t *dict_create(void) {
+cargo:warning=      |                           ^~~~~~~~~~~
+cargo:warning=runtime/memory.c:50:13: warning: unused function 'dict_add_word' [-Wunused-function]
+cargo:warning=   50 | static void dict_add_word(word_dictionary_t *dict, word_header_t *word) {
+cargo:warning=      |             ^~~~~~~~~~~~~
+cargo:warning=runtime/memory.c:64:23: warning: unused function 'dict_find_word' [-Wunused-function]
+cargo:warning=   64 | static word_header_t *dict_find_word(word_dictionary_t *dict, const char *name, size_t len) {
+cargo:warning=      |                       ^~~~~~~~~~~~~~
+cargo:warning=8 warnings generated.
+cargo:warning=runtime/ffi.c:362:16: warning: unused variable 'ptr_size_args' [-Wunused-variable]
+cargo:warning=  362 |     ffi_type_t ptr_size_args[] = {FFI_TYPE_POINTER, FFI_TYPE_LONG};
+cargo:warning=      |                ^~~~~~~~~~~~~
+cargo:warning=runtime/ffi.c:354:40: warning: unused parameter 'vm' [-Wunused-parameter]
+cargo:warning=  354 | void forth_ffi_init_stdlib(forth_vm_t *vm) {
+cargo:warning=      |                                        ^
+cargo:warning=runtime/ffi.c:416:23: warning: unused variable 'cb' [-Wunused-variable]
+cargo:warning=  416 |     forth_callback_t *cb = (forth_callback_t*)user_data;
+cargo:warning=      |                       ^~
+cargo:warning=3 warnings generated.
+cargo:warning=runtime/bootstrap.c:188:33: warning: unused parameter 'vm' [-Wunused-parameter]
+cargo:warning=  188 | void forth_postpone(forth_vm_t *vm) {
+cargo:warning=      |                                 ^
+cargo:warning=1 warning generated.
+cargo:warning=runtime/concurrency.c:64:32: warning: unused parameter 'parent_vm' [-Wunused-parameter]
+cargo:warning=   64 | cell_t forth_spawn(forth_vm_t* parent_vm, cell_t xt) {
+cargo:warning=      |                                ^
+cargo:warning=runtime/concurrency.c:116:29: warning: unused parameter 'vm' [-Wunused-parameter]
+cargo:warning=  116 | void forth_join(forth_vm_t* vm, cell_t thread_id) {
+cargo:warning=      |                             ^
+cargo:warning=2 warnings generated.
+exit status: 0
+exit status: 0
+exit status: 0
+exit status: 0
+exit status: 0
+cargo:rerun-if-env-changed=AR_aarch64-apple-darwin
+AR_aarch64-apple-darwin = None
+cargo:rerun-if-env-changed=AR_aarch64_apple_darwin
+AR_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=HOST_AR
+HOST_AR = None
+cargo:rerun-if-env-changed=AR
+AR = None
+cargo:rerun-if-env-changed=ARFLAGS
+ARFLAGS = None
+cargo:rerun-if-env-changed=HOST_ARFLAGS
+HOST_ARFLAGS = None
+cargo:rerun-if-env-changed=ARFLAGS_aarch64_apple_darwin
+ARFLAGS_aarch64_apple_darwin = None
+cargo:rerun-if-env-changed=ARFLAGS_aarch64-apple-darwin
+ARFLAGS_aarch64-apple-darwin = None
+cargo:rustc-link-lib=static=forthruntime
+cargo:rustc-link-search=native=/Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/fastforth-fc74427acccc59e2/out
+cargo:rustc-link-lib=pthread
+cargo:rerun-if-changed=runtime/
+cargo:rerun-if-changed=minimal_forth/
+cargo:warning=Embedding Fast Forth source code...
+cargo:warning=✓ Embedded source: 1602 KB
+cargo:rustc-env=EMBEDDED_SOURCE_SIZE=1641098
+cargo:rustc-env=EMBEDDED_SOURCE_PATH=/Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/fastforth-fc74427acccc59e2/out/embedded_source.tar.gz

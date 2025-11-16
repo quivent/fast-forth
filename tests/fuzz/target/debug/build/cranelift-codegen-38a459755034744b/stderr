@@ -1,0 +1,17 @@
+Writing generated file: /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/settings.rs
+Writing generated file: /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/types.rs
+Writing generated file: /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/opcodes.rs
+Writing generated file: /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/clif_opt.isle
+Writing generated file: /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/clif_lower.isle
+Writing generated file: /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/inst_builder.rs
+Writing generated file: /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/settings-arm64.rs
+Rebuilding /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_opt.rs
+Writing ISLE-generated Rust code to /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_opt.rs
+Rebuilding /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_x64.rs
+Writing ISLE-generated Rust code to /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_x64.rs
+Rebuilding /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_aarch64.rs
+Writing ISLE-generated Rust code to /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_aarch64.rs
+Rebuilding /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_s390x.rs
+Writing ISLE-generated Rust code to /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_s390x.rs
+Rebuilding /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_riscv64.rs
+Writing ISLE-generated Rust code to /Users/joshkornreich/Documents/Projects/Ollama/llama/variants/fast-forth/tests/fuzz/target/debug/build/cranelift-codegen-38a459755034744b/out/isle_riscv64.rs
