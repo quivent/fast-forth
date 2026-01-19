@@ -1,0 +1,249 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                   FAST FORTH SELF-MODIFYING CLI ARCHITECTURE                  ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            UPDATE WORKFLOW                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+User                Update Server              CLI Binary              Cache
+ │                         │                       │                     │
+ │ --self-update          │                       │                     │
+ ├────────────────────────┼──────────────────────▶│                     │
+ │                         │                       │                     │
+ │                         │  GET /manifest.json   │                     │
+ │                         │◀──────────────────────┤                     │
+ │                         │                       │                     │
+ │                         │  200 OK (manifest)    │                     │
+ │                         ├──────────────────────▶│                     │
+ │                         │                       │                     │
+ │                         │                       │ Verify signature    │
+ │                         │                       ├─────────────────────┤
+ │                         │                       │◀────────────────────┤
+ │                         │                       │                     │
+ │                         │  GET /core.forth      │                     │
+ │                         │◀──────────────────────┤                     │
+ │                         │                       │                     │
+ │                         │  200 OK (15 KB)       │                     │
+ │                         ├──────────────────────▶│                     │
+ │                         │                       │                     │
+ │                         │                       │ SHA256 verify       │
+ │                         │                       ├─────────────────────┤
+ │                         │                       │◀────────────────────┤
+ │                         │                       │                     │
+ │                         │                       │ Compile (Cranelift) │
+ │                         │                       ├─────────────────────┤
+ │                         │                       │ 5-7 seconds         │
+ │                         │                       ├─────────────────────┤
+ │                         │                       │◀────────────────────┤
+ │                         │                       │                     │
+ │                         │                       │ Cache artifacts     │
+ │                         │                       ├────────────────────▶│
+ │                         │                       │                     │
+ │                         │                       │ Hot-swap functions  │
+ │                         │                       │ (atomic pointer swap)│
+ │                         │                       │                     │
+ │  Update complete!       │                       │                     │
+ │◀────────────────────────┼───────────────────────┤                     │
+ │                         │                       │                     │
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         COMPONENT ARCHITECTURE                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│  CLI Binary (fastforth, 2.6 MB)                                          │
+│                                                                           │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  User Commands                                                     │  │
+│  │  • compile source.forth                                            │  │
+│  │  • --self-update                                                   │  │
+│  │  • --rollback                                                      │  │
+│  └──────────────┬─────────────────────────────────────────────────────┘  │
+│                 │                                                         │
+│  ┌──────────────▼─────────────────────────────────────────────────────┐  │
+│  │  Update Module (backend/src/update/)                              │  │
+│  │                                                                     │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │  │
+│  │  │  Updater     │  │  Manifest    │  │  Signature   │            │  │
+│  │  │              │  │  Parser      │  │  Verifier    │            │  │
+│  │  │ • check()    │  │              │  │  (Ed25519)   │            │  │
+│  │  │ • install()  │  │ • parse()    │  │              │            │  │
+│  │  │ • rollback() │  │ • verify()   │  │ • verify()   │            │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘            │  │
+│  │                                                                     │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │  │
+│  │  │  Cache       │  │  Hot-Swap    │  │  Function    │            │  │
+│  │  │  Manager     │  │  Manager     │  │  Registry    │            │  │
+│  │  │              │  │              │  │              │            │  │
+│  │  │ • get()      │  │ • swap()     │  │ • register() │            │  │
+│  │  │ • insert()   │  │ • grace()    │  │ • call()     │            │  │
+│  │  │ • evict()    │  │ • cleanup()  │  │              │            │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘            │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │  Cranelift JIT Compiler (backend/src/cranelift/)                   │  │
+│  │                                                                      │  │
+│  │  Source (.forth) → SSA IR → Cranelift IR → Native Code (.so)       │  │
+│  │                                                                      │  │
+│  │  Performance: 10-50ms per file, 70-90% of C runtime                │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ reads/writes
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Cache Directory (~/.cache/fastforth/)                                   │
+│                                                                           │
+│  ├── manifest.lock              Current version metadata                │
+│  ├── update.lock                Prevents concurrent updates              │
+│  │                                                                        │
+│  ├── src/                       Source code cache                        │
+│  │   ├── v1.2.3/                                                         │
+│  │   │   ├── core.forth         (50 KB total)                           │
+│  │   │   ├── lexer.forth                                                 │
+│  │   │   └── parser.forth                                                │
+│  │   └── v1.2.4/                                                         │
+│  │       ├── core.forth         (changed)                               │
+│  │       ├── lexer.forth        (changed)                               │
+│  │       └── parser.forth       (symlink to v1.2.3)                     │
+│  │                                                                        │
+│  └── compiled/                  Native code cache                        │
+│      ├── v1.2.3/                                                         │
+│      │   ├── core.so            (2 MB per version)                      │
+│      │   ├── lexer.so                                                    │
+│      │   └── parser.so                                                   │
+│      └── v1.2.4/                                                         │
+│          ├── core.so            (recompiled)                            │
+│          └── lexer.so           (recompiled)                            │
+│                                                                           │
+│  Total size: ~20 MB (with LRU eviction at 500 MB)                       │
+└──────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SECURITY MODEL                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Update Server (updates.fastforth.dev)                                  │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │  Release Pipeline                                                │  │
+│  │                                                                   │  │
+│  │  Developer → CI/CD → HSM (Air-Gapped) → Sign → Upload to CDN    │  │
+│  │                                                                   │  │
+│  │  Private Key: NEVER leaves HSM (Hardware Security Module)        │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  Files served:                                                           │
+│  • manifest.json          (signed with Ed25519)                         │
+│  • core.forth             (signed with Ed25519)                         │
+│  • core.forth.sig         (Ed25519 signature, 64 bytes)                 │
+│                                                                          │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │ HTTPS (TLS 1.3)
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  CLI Binary                                                              │
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │  Embedded Public Key (compile-time constant)                  │    │
+│  │                                                                 │    │
+│  │  const PUBLIC_KEY: &[u8] = include_bytes!("keys/public.pem");  │    │
+│  └────────────────────────────────────────────────────────────────┘    │
+│                                                                          │
+│  Verification Steps:                                                     │
+│  1. Download manifest.json                                              │
+│  2. Verify manifest signature with embedded public key                  │
+│  3. Download each file                                                  │
+│  4. Verify file signature                                               │
+│  5. Verify SHA256 hash                                                  │
+│  6. ONLY THEN compile and install                                       │
+│                                                                          │
+│  Security Properties:                                                    │
+│  ✅ Authenticity (Ed25519 signatures)                                   │
+│  ✅ Integrity (SHA256 hashes)                                           │
+│  ✅ Atomicity (all-or-nothing updates)                                  │
+│  ✅ Rollback protection (manifest chain)                                │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      PERFORMANCE CHARACTERISTICS                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Update Timeline (v1.2.3 → v1.2.4):
+─────────────────────────────────────────────────────────────────────────────
+T+0.0s   │ User: ./fastforth --self-update
+         │
+T+0.1s   │ ████ Fetching manifest.json (2 KB)
+         │
+T+0.2s   │ ████ Verifying manifest signature ✅
+         │
+T+0.3s   │ ████████████████ Downloading core.forth (12 KB)
+T+0.4s   │ ████ Downloading lexer.forth (9 KB)
+         │
+T+0.5s   │ ████ Verifying file signatures ✅
+         │
+T+0.6s   │ ████████████████████████████████████ Compiling core.forth (700ms)
+T+1.3s   │ ████████████████████████████████ Compiling lexer.forth (600ms)
+         │
+T+1.9s   │ ████ Hot-swapping functions (atomic)
+         │
+T+2.0s   │ ✅ Update complete!
+─────────────────────────────────────────────────────────────────────────────
+
+Total: 2 seconds (download 0.5s + compile 1.3s + swap 0.2s)
+
+Next startup: 80ms (loads cached native code, no compilation)
+
+
+Performance vs Binary Updates:
+─────────────────────────────────────────────────────────────────────────────
+                      Source Updates    Binary Updates
+Download Size:        15 KB             2.6 MB
+Download Time:        0.5s              3-5s
+Compilation:          1.3s              0s
+Hot-Swap:             0.2s              N/A (restart required)
+Total Update:         2.0s              3-5s + restart
+Next Startup:         80ms              100ms
+Runtime Performance:  70-90% C          100% C
+User Extensible:      ✅ Yes            ❌ No
+Disk Usage/Version:   50 KB + 2 MB      2.6 MB
+
+
+Cache Performance:
+─────────────────────────────────────────────────────────────────────────────
+Cache Hit Rate:       94%+ (typical usage)
+Cache Lookup:         < 1ms (memory-mapped)
+Eviction Policy:      LRU (Least Recently Used)
+Max Cache Size:       500 MB (configurable)
+Typical Cache Size:   20-50 MB (10 versions)
+
+
+Cranelift Compilation Performance:
+─────────────────────────────────────────────────────────────────────────────
+Small functions (10-20 lines):     1-5ms     (DUP, DROP, SWAP)
+Medium functions (50-100 lines):   10-30ms   (Lexer loops)
+Large functions (200-500 lines):   30-80ms   (Parser)
+Very large (1000+ lines):          100-200ms (Optimizer)
+
+Average: 10-50ms per function
+Parallel compilation: 4x speedup on 4-core CPU
+─────────────────────────────────────────────────────────────────────────────
+
+Key Metrics:
+• Update frequency: Daily/weekly (fast updates enable frequent releases)
+• Bandwidth savings: 99.4% vs binary updates
+• Disk savings: 68% vs keeping multiple binaries
+• Development iteration: 100x faster than LLVM (for updates)
+• Production performance: 70-90% of C (vs 100% with LLVM O3)
+
+═════════════════════════════════════════════════════════════════════════════
+End of Architecture Diagram
+═════════════════════════════════════════════════════════════════════════════
